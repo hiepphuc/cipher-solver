@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Công Cụ Giải Mã Mật Mã Học</title>
+    <!-- Thư viện React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel để xử lý JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        dark: {
+                            bg: '#111827',
+                            card: '#1f2937',
+                            text: '#f3f4f6',
+                            input: '#374151',
+                            border: '#4b5563'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .step-log { font-family: 'Courier New', Courier, monospace; white-space: pre-wrap; }
+        .transition-colors { transition-property: background-color, border-color, color, fill, stroke; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 300ms; }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 transition-colors duration-300">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // --- Icons (Thay thế lucide-react bằng SVG trực tiếp) ---
+        const SunIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-yellow-500">
+                <circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41-1.41"/><path d="m19.07 4.93-1.41 1.41"/>
+            </svg>
+        );
+
+        const MoonIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500">
+                <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+            </svg>
+        );
+
+        // --- Hàm Tiện Ích ---
+        const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        const mod = (n, m) => ((n % m) + m) % m;
+        
+        const gcd = (a, b) => b === 0 ? a : gcd(b, a % b);
+        const extendedGcd = (a, b) => {
+            if (b === 0) return { gcd: a, x: 1, y: 0 };
+            const { gcd: g, x: x1, y: y1 } = extendedGcd(b, a % b);
+            return { gcd: g, x: y1, y: x1 - Math.floor(a / b) * y1 };
+        };
+        const modInverse = (a, m) => {
+            const { gcd: g, x } = extendedGcd(a, m);
+            if (g !== 1) return null;
+            return mod(x, m);
+        };
+
+        const det2x2 = (m) => m[0][0] * m[1][1] - m[0][1] * m[1][0];
+        const adj2x2 = (m) => [[m[1][1], -m[0][1]], [-m[1][0], m[0][0]]];
+
+        const bigIntPowMod = (base, exp, modVal) => {
+            let res = 1n;
+            base = base % modVal;
+            while (exp > 0n) {
+                if (exp % 2n === 1n) res = (res * base) % modVal;
+                base = (base * base) % modVal;
+                exp /= 2n;
+            }
+            return res;
+        };
+
+        // --- Components Giao Diện Chung ---
+
+        const Section = ({ title, children }) => (
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md mb-6 transition-colors duration-300">
+                <h2 className="text-2xl font-bold text-blue-600 dark:text-blue-400 mb-4 border-b dark:border-gray-700 pb-2">{title}</h2>
+                {children}
+            </div>
+        );
+
+        const InputGroup = ({ label, value, onChange, type = "text", placeholder = "" }) => (
+            <div className="mb-4">
+                <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2">{label}</label>
+                <input 
+                    type={type} 
+                    value={value} 
+                    onChange={onChange}
+                    className="shadow appearance-none border dark:border-gray-600 rounded w-full py-2 px-3 text-gray-700 dark:text-white bg-white dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline focus:border-blue-500 transition-colors duration-300"
+                    placeholder={placeholder}
+                />
+            </div>
+        );
+
+        const Button = ({ onClick, children, variant = "primary" }) => {
+            const colors = variant === "primary" 
+                ? "bg-blue-500 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-800" 
+                : "bg-green-500 hover:bg-green-700 dark:bg-green-600 dark:hover:bg-green-800";
+            return (
+                <button 
+                    onClick={onClick}
+                    className={`${colors} text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline mr-2 transition-colors duration-300`}
+                >
+                    {children}
+                </button>
+            )
+        };
+
+        const ResultBox = ({ result, steps }) => (
+            <div className="mt-6 bg-gray-100 dark:bg-gray-700 p-4 rounded border border-gray-300 dark:border-gray-600 transition-colors duration-300">
+                <h3 className="font-bold text-lg mb-2 text-gray-800 dark:text-gray-200">Kết quả:</h3>
+                <div className="text-xl font-mono text-blue-800 dark:text-blue-300 break-all bg-white dark:bg-gray-800 p-2 rounded mb-4 border dark:border-gray-600 transition-colors duration-300">{result}</div>
+                {steps && (
+                    <>
+                        <h4 className="font-bold text-md mb-2 text-gray-700 dark:text-gray-300">Lời giải chi tiết:</h4>
+                        <div className="step-log text-sm text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800 p-2 rounded border dark:border-gray-600 max-h-60 overflow-y-auto transition-colors duration-300 whitespace-pre-wrap">
+                            {steps}
+                        </div>
+                    </>
+                )}
+            </div>
+        );
+
+        // --- Các Module Mật Mã ---
+
+        const CaesarCipher = () => {
+            const [text, setText] = useState("");
+            const [key, setKey] = useState(3);
+            const [result, setResult] = useState("");
+            const [steps, setSteps] = useState("");
+
+            const process = (isEncrypt) => {
+                let log = [];
+                let output = "";
+                const k = parseInt(key);
+                if (isNaN(k)) return alert("Khóa k phải là số nguyên");
+
+                log.push(`Công thức ${isEncrypt ? "Mã hóa" : "Giải mã"}: C = (P ${isEncrypt ? "+" : "-"} k) mod 26`);
+                log.push(`Khóa k = ${k}`);
+
+                const cleanText = text.toUpperCase().replace(/[^A-Z]/g, "");
+                
+                for (let i = 0; i < cleanText.length; i++) {
+                    const char = cleanText[i];
+                    const pIdx = alphabet.indexOf(char);
+                    let cIdx;
+                    
+                    if (isEncrypt) {
+                        cIdx = mod(pIdx + k, 26);
+                        log.push(`'${char}'(${pIdx}) + ${k} = ${pIdx+k} ≡ ${cIdx} mod 26 -> '${alphabet[cIdx]}'`);
+                    } else {
+                        cIdx = mod(pIdx - k, 26);
+                        log.push(`'${char}'(${pIdx}) - ${k} = ${pIdx-k} ≡ ${cIdx} mod 26 -> '${alphabet[cIdx]}'`);
+                    }
+                    output += alphabet[cIdx];
+                }
+                setResult(output);
+                setSteps(log.join("\n"));
+            };
+
+            return (
+                <Section title="Mã Caesar">
+                    <InputGroup label="Văn bản (A-Z)" value={text} onChange={(e) => setText(e.target.value)} />
+                    <InputGroup label="Khóa k (Dịch chuyển)" type="number" value={key} onChange={(e) => setKey(e.target.value)} />
+                    <div className="flex">
+                        <Button onClick={() => process(true)}>Mã hóa</Button>
+                        <Button onClick={() => process(false)} variant="secondary">Giải mã</Button>
+                    </div>
+                    {result && <ResultBox result={result} steps={steps} />}
+                </Section>
+            );
+        };
+
+        const VigenereCipher = () => {
+            const [text, setText] = useState("");
+            const [key1, setKey1] = useState("");
+            const [key2, setKey2] = useState("");
+            const [useTwoKeys, setUseTwoKeys] = useState(false);
+            const [result, setResult] = useState("");
+            const [steps, setSteps] = useState("");
+
+            const process = (isEncrypt) => {
+                let log = [];
+                let output = "";
+                const cleanText = text.toUpperCase().replace(/[^A-Z]/g, "");
+                const cleanKey1 = key1.toUpperCase().replace(/[^A-Z]/g, "");
+                const cleanKey2 = key2.toUpperCase().replace(/[^A-Z]/g, "");
+
+                if (!cleanKey1) return alert("Vui lòng nhập Khóa 1");
+                if (useTwoKeys && !cleanKey2) return alert("Vui lòng nhập Khóa 2");
+
+                log.push(`Văn bản (P): ${cleanText}`);
+                log.push(`Khóa 1 (K1): ${cleanKey1}`);
+                if (useTwoKeys) log.push(`Khóa 2 (K2): ${cleanKey2}`);
+                log.push("-".repeat(40));
+
+                if (useTwoKeys) {
+                    log.push(`Chế độ 2 Khóa: C = (P + K1 + K2) mod 26 (Mã hóa)`);
+                    log.push(`               P = (C - K1 - K2) mod 26 (Giải mã)`);
+                }
+
+                for (let i = 0; i < cleanText.length; i++) {
+                    const char = cleanText[i];
+                    const pIdx = alphabet.indexOf(char);
+                    
+                    const k1Char = cleanKey1[i % cleanKey1.length];
+                    const k1Idx = alphabet.indexOf(k1Char);
+
+                    let k2Idx = 0;
+                    let k2Char = '';
+                    if (useTwoKeys) {
+                        k2Char = cleanKey2[i % cleanKey2.length];
+                        k2Idx = alphabet.indexOf(k2Char);
+                    }
+                    
+                    let cIdx;
+                    let formula = "";
+                    
+                    if (isEncrypt) {
+                        // C = P + K1 (+ K2)
+                        cIdx = mod(pIdx + k1Idx + k2Idx, 26);
+                        if (useTwoKeys) {
+                            formula = `'${char}'(${pIdx}) + '${k1Char}'(${k1Idx}) + '${k2Char}'(${k2Idx}) = ${pIdx+k1Idx+k2Idx} ≡ ${cIdx}`;
+                        } else {
+                            formula = `'${char}'(${pIdx}) + '${k1Char}'(${k1Idx}) = ${pIdx+k1Idx} ≡ ${cIdx}`;
+                        }
+                    } else {
+                        // P = C - K1 (- K2)
+                        cIdx = mod(pIdx - k1Idx - k2Idx, 26);
+                        if (useTwoKeys) {
+                            formula = `'${char}'(${pIdx}) - '${k1Char}'(${k1Idx}) - '${k2Char}'(${k2Idx}) = ${pIdx-k1Idx-k2Idx} ≡ ${cIdx}`;
+                        } else {
+                            formula = `'${char}'(${pIdx}) - '${k1Char}'(${k1Idx}) = ${pIdx-k1Idx} ≡ ${cIdx}`;
+                        }
+                    }
+                    log.push(`[${i+1}] ${formula} -> '${alphabet[cIdx]}'`);
+                    output += alphabet[cIdx];
+                }
+                setResult(output);
+                setSteps(log.join("\n"));
+            };
+
+            return (
+                <Section title="Mã Vigenere (1 & 2 Khóa)">
+                    <div className="mb-4">
+                        <label className="flex items-center space-x-2 cursor-pointer">
+                            <input 
+                                type="checkbox" 
+                                checked={useTwoKeys} 
+                                onChange={(e) => setUseTwoKeys(e.target.checked)}
+                                className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 border-gray-300 dark:border-gray-500"
+                            />
+                            <span className="text-gray-700 dark:text-gray-300 font-bold ml-2">Sử dụng 2 khóa (Vigenere 2 Key)</span>
+                        </label>
+                    </div>
+                    
+                    <InputGroup label="Văn bản" value={text} onChange={(e) => setText(e.target.value)} />
+                    <div className="flex gap-4">
+                        <div className="flex-1">
+                            <InputGroup label="Khóa 1 (K1)" value={key1} onChange={(e) => setKey1(e.target.value)} />
+                        </div>
+                        {useTwoKeys && (
+                            <div className="flex-1">
+                                <InputGroup label="Khóa 2 (K2)" value={key2} onChange={(e) => setKey2(e.target.value)} />
+                            </div>
+                        )}
+                    </div>
+                    
+                    <div className="flex">
+                        <Button onClick={() => process(true)}>Mã hóa</Button>
+                        <Button onClick={() => process(false)} variant="secondary">Giải mã</Button>
+                    </div>
+                    {result && <ResultBox result={result} steps={steps} />}
+                </Section>
+            );
+        };
+
+        const PlayfairCipher = () => {
+            const [text, setText] = useState("");
+            const [key, setKey] = useState("");
+            const [result, setResult] = useState("");
+            const [steps, setSteps] = useState("");
+
+            const generateMatrix = (k) => {
+                let matrix = [];
+                let seen = new Set();
+                let kClean = k.toUpperCase().replace(/[^A-Z]/g, "").replace(/J/g, "I");
+                
+                for(let c of kClean) {
+                    if(!seen.has(c)) {
+                        seen.add(c);
+                        matrix.push(c);
+                    }
+                }
+                for(let c of alphabet) {
+                    if(c !== 'J' && !seen.has(c)) {
+                        seen.add(c);
+                        matrix.push(c);
+                    }
+                }
+                return matrix;
+            };
+
+            const formatMatrix = (m) => {
+                let s = "Ma trận khóa:\n";
+                for(let i=0; i<5; i++) {
+                    s += m.slice(i*5, i*5+5).join(" ") + "\n";
+                }
+                return s;
+            };
+
+            const process = (isEncrypt) => {
+                if(!key) return alert("Nhập khóa");
+                let log = [];
+                const matrix = generateMatrix(key);
+                log.push(formatMatrix(matrix));
+
+                let cleanText = text.toUpperCase().replace(/[^A-Z]/g, "").replace(/J/g, "I");
+                let pairs = [];
+                
+                if (isEncrypt) {
+                    for(let i=0; i<cleanText.length; i++) {
+                        let c1 = cleanText[i];
+                        let c2 = (i+1 < cleanText.length) ? cleanText[i+1] : 'X';
+                        
+                        if(c1 === c2) {
+                            pairs.push([c1, 'X']);
+                        } else {
+                            pairs.push([c1, c2]);
+                            i++;
+                        }
+                    }
+                    if(pairs.length > 0 && pairs[pairs.length-1].length === 1) {
+                         pairs[pairs.length-1].push('X');
+                    }
+                } else {
+                    for(let i=0; i<cleanText.length; i+=2) {
+                        pairs.push([cleanText[i], cleanText[i+1] || 'X']);
+                    }
+                }
+
+                log.push(`Các cặp ký tự: ${pairs.map(p => p.join("")).join(" ")}`);
+                
+                let output = "";
+                
+                pairs.forEach(pair => {
+                    let [c1, c2] = pair;
+                    let idx1 = matrix.indexOf(c1);
+                    let idx2 = matrix.indexOf(c2);
+                    let r1 = Math.floor(idx1 / 5), c1_pos = idx1 % 5;
+                    let r2 = Math.floor(idx2 / 5), c2_pos = idx2 % 5;
+                    
+                    let res1, res2, rule;
+
+                    if (r1 === r2) { // Same Row
+                        rule = "Cùng hàng -> Dịch phải (Encrypt) / Dịch trái (Decrypt)";
+                        if (isEncrypt) {
+                            res1 = matrix[r1 * 5 + (c1_pos + 1) % 5];
+                            res2 = matrix[r2 * 5 + (c2_pos + 1) % 5];
+                        } else {
+                            res1 = matrix[r1 * 5 + mod(c1_pos - 1, 5)];
+                            res2 = matrix[r2 * 5 + mod(c2_pos - 1, 5)];
+                        }
+                    } else if (c1_pos === c2_pos) { // Same Col
+                        rule = "Cùng cột -> Dịch xuống (Encrypt) / Dịch lên (Decrypt)";
+                        if (isEncrypt) {
+                            res1 = matrix[((r1 + 1) % 5) * 5 + c1_pos];
+                            res2 = matrix[((r2 + 1) % 5) * 5 + c2_pos];
+                        } else {
+                            res1 = matrix[mod(r1 - 1, 5) * 5 + c1_pos];
+                            res2 = matrix[mod(r2 - 1, 5) * 5 + c2_pos];
+                        }
+                    } else { // Rectangle
+                        rule = "Hình chữ nhật -> Lấy giao điểm";
+                        res1 = matrix[r1 * 5 + c2_pos];
+                        res2 = matrix[r2 * 5 + c1_pos];
+                    }
+
+                    log.push(`${c1}${c2} -> ${res1}${res2} (${rule})`);
+                    output += res1 + res2;
+                });
+
+                setResult(output);
+                setSteps(log.join("\n"));
+            };
+
+            return (
+                <Section title="Mã Playfair">
+                    <InputGroup label="Văn bản" value={text} onChange={(e) => setText(e.target.value)} />
+                    <InputGroup label="Khóa (Từ khóa)" value={key} onChange={(e) => setKey(e.target.value)} />
+                    <div className="flex">
+                        <Button onClick={() => process(true)}>Mã hóa</Button>
+                        <Button onClick={() => process(false)} variant="secondary">Giải mã</Button>
+                    </div>
+                    {result && <ResultBox result={result} steps={steps} />}
+                </Section>
+            );
+        };
+
+        const HillCipher = () => {
+            const [text, setText] = useState("");
+            const [k00, setK00] = useState(""); const [k01, setK01] = useState("");
+            const [k10, setK10] = useState(""); const [k11, setK11] = useState("");
+            const [result, setResult] = useState("");
+            const [steps, setSteps] = useState("");
+
+            const process = (isEncrypt) => {
+                let log = [];
+                let output = "";
+                let K = [[parseInt(k00), parseInt(k01)], [parseInt(k10), parseInt(k11)]];
+                
+                if(K.flat().some(isNaN)) return alert("Nhập ma trận khóa hợp lệ");
+
+                let det = det2x2(K);
+                let detInv = modInverse(mod(det, 26), 26);
+                
+                log.push(`Ma trận khóa K:\n[${K[0][0]}, ${K[0][1]}]\n[${K[1][0]}, ${K[1][1]}]`);
+                log.push(`Det(K) = ${K[0][0]}*${K[1][1]} - ${K[0][1]}*${K[1][0]} = ${det}`);
+                log.push(`Det(K) mod 26 = ${mod(det, 26)}`);
+
+                if (detInv === null) {
+                    log.push(`CẢNH BÁO: GCD(${mod(det, 26)}, 26) != 1. Ma trận không khả nghịch, không thể giải mã!`);
+                    if(!isEncrypt) return alert("Ma trận không khả nghịch, không thể giải mã.");
+                } else {
+                    log.push(`Nghịch đảo Det(K)^-1 mod 26 = ${detInv}`);
+                }
+
+                let MatrixUsed = K;
+                if (!isEncrypt) {
+                    let adj = adj2x2(K);
+                    let K_inv = [
+                        [mod(adj[0][0] * detInv, 26), mod(adj[0][1] * detInv, 26)],
+                        [mod(adj[1][0] * detInv, 26), mod(adj[1][1] * detInv, 26)]
+                    ];
+                    log.push(`Ma trận nghịch đảo K^-1:\n[${K_inv[0][0]}, ${K_inv[0][1]}]\n[${K_inv[1][0]}, ${K_inv[1][1]}]`);
+                    MatrixUsed = K_inv;
+                }
+
+                let cleanText = text.toUpperCase().replace(/[^A-Z]/g, "");
+                if (cleanText.length % 2 !== 0) {
+                    cleanText += 'X';
+                    log.push("Đã thêm ký tự đệm 'X' vào cuối để đủ cặp.");
+                }
+
+                for(let i=0; i<cleanText.length; i+=2) {
+                    let v1 = alphabet.indexOf(cleanText[i]);
+                    let v2 = alphabet.indexOf(cleanText[i+1]);
+                    
+                    log.push(`\nCặp: ${cleanText[i]}(${v1}), ${cleanText[i+1]}(${v2}) -> Vector [${v1}, ${v2}]^T`);
+                    
+                    let c1 = mod(MatrixUsed[0][0]*v1 + MatrixUsed[0][1]*v2, 26);
+                    let c2 = mod(MatrixUsed[1][0]*v1 + MatrixUsed[1][1]*v2, 26);
+
+                    log.push(`Tính: [${MatrixUsed[0][0]}*${v1} + ${MatrixUsed[0][1]}*${v2}] mod 26 = ${c1} (${alphabet[c1]})`);
+                    log.push(`Tính: [${MatrixUsed[1][0]}*${v1} + ${MatrixUsed[1][1]}*${v2}] mod 26 = ${c2} (${alphabet[c2]})`);
+                    
+                    output += alphabet[c1] + alphabet[c2];
+                }
+
+                setResult(output);
+                setSteps(log.join("\n"));
+            };
+
+            return (
+                <Section title="Mã Hill (Ma trận 2x2)">
+                    <InputGroup label="Văn bản" value={text} onChange={(e) => setText(e.target.value)} />
+                    <div className="mb-4">
+                        <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2">Ma trận khóa:</label>
+                        <div className="grid grid-cols-2 gap-2 w-32">
+                            <input className="border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 dark:text-white" placeholder="00" value={k00} onChange={e=>setK00(e.target.value)} />
+                            <input className="border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 dark:text-white" placeholder="01" value={k01} onChange={e=>setK01(e.target.value)} />
+                            <input className="border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 dark:text-white" placeholder="10" value={k10} onChange={e=>setK10(e.target.value)} />
+                            <input className="border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 dark:text-white" placeholder="11" value={k11} onChange={e=>setK11(e.target.value)} />
+                        </div>
+                    </div>
+                    <div className="flex">
+                        <Button onClick={() => process(true)}>Mã hóa</Button>
+                        <Button onClick={() => process(false)} variant="secondary">Giải mã</Button>
+                    </div>
+                    {result && <ResultBox result={result} steps={steps} />}
+                </Section>
+            );
+        };
+
+        const AffineCipher = () => {
+            const [text, setText] = useState("");
+            const [a, setA] = useState(5);
+            const [b, setB] = useState(8);
+            const [result, setResult] = useState("");
+            const [steps, setSteps] = useState("");
+
+            const process = (isEncrypt) => {
+                let log = [];
+                let output = "";
+                let valA = parseInt(a);
+                let valB = parseInt(b);
+
+                if(gcd(valA, 26) !== 1) {
+                    return alert(`Giá trị a=${valA} không hợp lệ! GCD(a, 26) phải bằng 1.`);
+                }
+
+                let aInv = modInverse(valA, 26);
+                log.push(`Hàm Mã hóa: E(x) = (${valA}x + ${valB}) mod 26`);
+                log.push(`Hàm Giải mã: D(y) = ${aInv}(y - ${valB}) mod 26`);
+                log.push(`Nghịch đảo của a=${valA} mod 26 là: ${aInv}`);
+
+                let cleanText = text.toUpperCase().replace(/[^A-Z]/g, "");
+
+                for(let i=0; i<cleanText.length; i++) {
+                    let x = alphabet.indexOf(cleanText[i]);
+                    let res;
+                    if(isEncrypt) {
+                        res = mod(valA * x + valB, 26);
+                        log.push(`'${cleanText[i]}'(${x}) -> (${valA}*${x} + ${valB}) mod 26 = ${res} ('${alphabet[res]}')`);
+                    } else {
+                        res = mod(aInv * (x - valB), 26);
+                        log.push(`'${cleanText[i]}'(${x}) -> ${aInv}*(${x} - ${valB}) mod 26 = ${res} ('${alphabet[res]}')`);
+                    }
+                    output += alphabet[res];
+                }
+
+                setResult(output);
+                setSteps(log.join("\n"));
+            }
+
+            return (
+                <Section title="Mã Affine">
+                    <InputGroup label="Văn bản" value={text} onChange={(e) => setText(e.target.value)} />
+                    <div className="flex gap-4">
+                        <div className="w-1/2">
+                            <InputGroup label="Hệ số a (GCD(a,26)=1)" type="number" value={a} onChange={(e) => setA(e.target.value)} />
+                        </div>
+                        <div className="w-1/2">
+                            <InputGroup label="Hệ số b (độ dịch)" type="number" value={b} onChange={(e) => setB(e.target.value)} />
+                        </div>
+                    </div>
+                    <div className="flex">
+                        <Button onClick={() => process(true)}>Mã hóa</Button>
+                        <Button onClick={() => process(false)} variant="secondary">Giải mã</Button>
+                    </div>
+                    {result && <ResultBox result={result} steps={steps} />}
+                </Section>
+            );
+        };
+
+        const RSACipher = () => {
+            const [p, setP] = useState("");
+            const [q, setQ] = useState("");
+            const [eVal, setE] = useState("");
+            const [message, setMessage] = useState("");
+            const [result, setResult] = useState("");
+            const [steps, setSteps] = useState("");
+
+            const process = (mode) => {
+                let log = [];
+                try {
+                    const bigP = BigInt(p);
+                    const bigQ = BigInt(q);
+                    const bigE = BigInt(eVal);
+                    const bigN = bigP * bigQ;
+                    const phi = (bigP - 1n) * (bigQ - 1n);
+                    
+                    log.push(`1. Tính n = p * q = ${bigP} * ${bigQ} = ${bigN}`);
+                    log.push(`2. Tính phi(n) = (p-1)*(q-1) = ${phi}`);
+
+                    let d = null;
+                    const extendedGcdBig = (a, b) => {
+                        if (b === 0n) return { gcd: a, x: 1n, y: 0n };
+                        const { gcd: g, x: x1, y: y1 } = extendedGcdBig(b, a % b);
+                        return { gcd: g, x: y1, y: x1 - (a / b) * y1 };
+                    };
+                    
+                    const { gcd: gVal, x: dVal } = extendedGcdBig(bigE, phi);
+                    if (gVal !== 1n) {
+                         log.push(`LỖI: e=${bigE} không nguyên tố cùng nhau với phi(n)=${phi}. Vui lòng chọn e khác.`);
+                         setSteps(log.join("\n"));
+                         return;
+                    }
+                    d = (dVal % phi + phi) % phi;
+                    log.push(`3. Tính d = e^-1 mod phi(n) = ${d}`);
+                    log.push(`=> Khóa công khai (e, n) = (${bigE}, ${bigN})`);
+                    log.push(`=> Khóa bí mật (d, n) = (${d}, ${bigN})`);
+
+                    if (mode === 'encrypt' || mode === 'decrypt') {
+                        if (!message) return alert("Nhập thông điệp số m");
+                        const m = BigInt(message);
+                        
+                        if (mode === 'encrypt') {
+                            const c = bigIntPowMod(m, bigE, bigN);
+                            log.push(`\nMã hóa: C = ${m}^${bigE} mod ${bigN}`);
+                            log.push(`Kết quả C = ${c}`);
+                            setResult(c.toString());
+                        } else {
+                            const dec = bigIntPowMod(m, d, bigN);
+                            log.push(`\nGiải mã: M = ${m}^${d} mod ${bigN}`);
+                            log.push(`Kết quả M = ${dec}`);
+                            setResult(dec.toString());
+                        }
+                    } else {
+                        setResult("");
+                    }
+                } catch (err) {
+                    log.push("Lỗi: Kiểm tra lại các số liệu nhập vào. Phải là số nguyên.");
+                    console.error(err);
+                }
+                setSteps(log.join("\n"));
+            };
+
+            return (
+                <Section title="Hệ mật RSA">
+                    <div className="grid grid-cols-3 gap-4">
+                        <InputGroup label="p (SNT)" value={p} onChange={(e) => setP(e.target.value)} />
+                        <InputGroup label="q (SNT)" value={q} onChange={(e) => setQ(e.target.value)} />
+                        <InputGroup label="e (Public Key)" value={eVal} onChange={(e) => setE(e.target.value)} />
+                    </div>
+                    <Button onClick={() => process('calcKeys')} variant="secondary">Tính d & Khóa</Button>
+                    
+                    <div className="mt-4 border-t dark:border-gray-600 pt-4">
+                        <InputGroup label="Thông điệp m / Bản mã c" value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Nhập số..." />
+                        <div className="flex">
+                            <Button onClick={() => process('encrypt')}>Mã hóa (m^e)</Button>
+                            <Button onClick={() => process('decrypt')} variant="secondary">Giải mã (c^d)</Button>
+                        </div>
+                    </div>
+                    {steps && <ResultBox result={result} steps={steps} />}
+                </Section>
+            );
+        };
+        
+        const DiffieHellman = () => {
+            const [p, setP] = useState("23");
+            const [g, setG] = useState("5");
+            const [a, setA] = useState("6");
+            const [b, setB] = useState("15");
+            const [result, setResult] = useState("");
+            const [steps, setSteps] = useState("");
+            
+            const process = () => {
+                let log = [];
+                try {
+                    const bigP = BigInt(p);
+                    const bigG = BigInt(g);
+                    const bigA = BigInt(a);
+                    const bigB = BigInt(b);
+                    
+                    log.push(`Tham số công khai: p=${bigP}, g=${bigG}`);
+                    log.push(`Bí mật của Alice: a=${bigA}`);
+                    log.push(`Bí mật của Bob: b=${bigB}`);
+                    
+                    const A_pub = bigIntPowMod(bigG, bigA, bigP);
+                    log.push(`\n1. Alice tính A = g^a mod p = ${bigG}^${bigA} mod ${bigP} = ${A_pub}`);
+                    
+                    const B_pub = bigIntPowMod(bigG, bigB, bigP);
+                    log.push(`2. Bob tính B = g^b mod p = ${bigG}^${bigB} mod ${bigP} = ${B_pub}`);
+                    
+                    const S_Alice = bigIntPowMod(B_pub, bigA, bigP);
+                    log.push(`\n3. Alice tính khóa chung S = B^a mod p = ${B_pub}^${bigA} mod ${bigP} = ${S_Alice}`);
+                    
+                    const S_Bob = bigIntPowMod(A_pub, bigB, bigP);
+                    log.push(`4. Bob tính khóa chung S = A^b mod p = ${A_pub}^${bigB} mod ${bigP} = ${S_Bob}`);
+                    
+                    if(S_Alice === S_Bob) {
+                        setResult(`Khóa chung S = ${S_Alice}`);
+                    } else {
+                        setResult("Lỗi tính toán");
+                    }
+                    
+                } catch(e) {
+                    log.push("Lỗi nhập liệu.");
+                }
+                setSteps(log.join("\n"));
+            }
+            
+            return (
+                 <Section title="Trao đổi khóa Diffie-Hellman">
+                    <div className="grid grid-cols-2 gap-4">
+                        <InputGroup label="Số nguyên tố p" value={p} onChange={(e) => setP(e.target.value)} />
+                        <InputGroup label="Căn nguyên thủy g" value={g} onChange={(e) => setG(e.target.value)} />
+                        <InputGroup label="Số bí mật Alice (a)" value={a} onChange={(e) => setA(e.target.value)} />
+                        <InputGroup label="Số bí mật Bob (b)" value={b} onChange={(e) => setB(e.target.value)} />
+                    </div>
+                    <Button onClick={process}>Tính khóa chung</Button>
+                    {result && <ResultBox result={result} steps={steps} />}
+                 </Section>
+            )
+        }
+
+        const App = () => {
+            const [activeTab, setActiveTab] = useState("caesar");
+            const [darkMode, setDarkMode] = useState(false);
+
+            useEffect(() => {
+                if (darkMode) {
+                    document.documentElement.classList.add('dark');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                }
+            }, [darkMode]);
+
+            const tabs = [
+                { id: "caesar", label: "Caesar" },
+                { id: "vigenere", label: "Vigenere" },
+                { id: "playfair", label: "Playfair" },
+                { id: "hill", label: "Hill" },
+                { id: "affine", label: "Affine" },
+                { id: "rsa", label: "RSA" },
+                { id: "dh", label: "Diffie-Hellman" }
+            ];
+
+            return (
+                <div className="min-h-screen p-8 max-w-4xl mx-auto transition-colors duration-300">
+                    <header className="mb-8 text-center relative">
+                         <button 
+                            onClick={() => setDarkMode(!darkMode)}
+                            className="absolute right-0 top-0 p-2 rounded-full bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                            title={darkMode ? "Chuyển sang chế độ sáng" : "Chuyển sang chế độ tối"}
+                        >
+                            {darkMode ? <SunIcon /> : <MoonIcon />}
+                        </button>
+                        <h1 className="text-4xl font-extrabold text-gray-800 dark:text-white transition-colors">Crypto Solver</h1>
+                        <p className="text-gray-600 dark:text-gray-400 mt-2 transition-colors">Công cụ giải bài tập Mật Mã Học chi tiết</p>
+                    </header>
+
+                    <div className="flex flex-wrap gap-2 mb-6 justify-center">
+                        {tabs.map(tab => (
+                            <button
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id)}
+                                className={`px-4 py-2 rounded-full font-medium transition-all duration-300 ${
+                                    activeTab === tab.id 
+                                    ? "bg-blue-600 text-white shadow-lg transform scale-105" 
+                                    : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                }`}
+                            >
+                                {tab.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    <main>
+                        {/* Giữ nguyên state khi chuyển tab */}
+                        <div style={{ display: activeTab === 'caesar' ? 'block' : 'none' }}><CaesarCipher /></div>
+                        <div style={{ display: activeTab === 'vigenere' ? 'block' : 'none' }}><VigenereCipher /></div>
+                        <div style={{ display: activeTab === 'playfair' ? 'block' : 'none' }}><PlayfairCipher /></div>
+                        <div style={{ display: activeTab === 'hill' ? 'block' : 'none' }}><HillCipher /></div>
+                        <div style={{ display: activeTab === 'affine' ? 'block' : 'none' }}><AffineCipher /></div>
+                        <div style={{ display: activeTab === 'rsa' ? 'block' : 'none' }}><RSACipher /></div>
+                        <div style={{ display: activeTab === 'dh' ? 'block' : 'none' }}><DiffieHellman /></div>
+                    </main>
+                    
+                    <footer className="text-center text-gray-500 dark:text-gray-400 text-sm mt-12 pb-4 transition-colors">
+                        Được xây dựng để hỗ trợ học tập môn An toàn thông tin.
+                    </footer>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
