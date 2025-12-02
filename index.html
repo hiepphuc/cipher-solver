@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Công Cụ Giải Mã Mật Mã Học</title>
-    <!-- Thư viện React & ReactDOM -->
+    <!-- React & ReactDOM -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <!-- Babel để xử lý JSX -->
@@ -683,15 +683,16 @@
             const [p, setP] = useState("");
             const [q, setQ] = useState("");
             const [eVal, setE] = useState("");
+            const [nVal, setNVal] = useState("");
             const [message, setMessage] = useState("");
             const [result, setResult] = useState("");
             const [steps, setSteps] = useState([]);
+            const [mode, setMode] = useState("pq"); // "pq" or "n"
 
             const getModExpSteps = (base, exp, m) => {
                 let steps = [];
                 let binaryExp = exp.toString(2);
                 
-                // Fallback for massive exponents
                 if (binaryExp.length > 50) {
                     steps.push(<div className="text-orange-600">Số mũ quá lớn ({binaryExp.length} bits) để hiển thị chi tiết. Chỉ hiển thị kết quả.</div>);
                     return { val: bigIntPowMod(base, exp, m), steps };
@@ -710,12 +711,10 @@
                     let bit = binaryExp[i];
                     let oldR = r;
                     
-                    // Square
                     let r_sq = (r * r) % m;
                     let opDesc = <span>Square: {oldR.toString()}² ≡ <strong>{r_sq.toString()}</strong></span>;
                     r = r_sq;
                     
-                    // Multiply if bit is 1
                     if (bit === '1') {
                         let r_mul = (r * base) % m;
                         opDesc = <span>{opDesc} <br/> Multiply (bit=1): {r.toString()} × {base.toString()} ≡ <strong>{r_mul.toString()}</strong></span>;
@@ -753,50 +752,68 @@
                 return { val: r, steps: steps };
             };
 
-            const process = (mode) => {
+            const process = (action) => {
                 let log = [];
                 try {
-                    const bigP = BigInt(p), bigQ = BigInt(q), bigE = BigInt(eVal);
-                    const bigN = bigP * bigQ;
-                    const phi = (bigP - 1n) * (bigQ - 1n);
-                    
-                    log.push(<div>1. Tính <span className="math-font">n = p × q</span> = {bigP.toString()} × {bigQ.toString()} = <span className="font-bold">{bigN.toString()}</span></div>);
-                    log.push(<div>2. Tính <span className="math-font">φ(n) = (p-1)(q-1)</span> = {phi.toString()}</div>);
+                    let bigN, bigE, d = null;
 
-                    let d = null;
-                    const extendedGcdBig = (a, b) => {
-                        if (b === 0n) return { gcd: a, x: 1n, y: 0n };
-                        const { gcd: g, x: x1, y: y1 } = extendedGcdBig(b, a % b);
-                        return { gcd: g, x: y1, y: x1 - (a / b) * y1 };
-                    };
-                    const { gcd: gVal, x: dVal } = extendedGcdBig(bigE, phi);
-                    
-                    if (gVal !== 1n) {
-                         log.push(<div className="text-red-500 font-bold">LỖI: e={bigE.toString()} không nguyên tố cùng nhau với φ(n)={phi.toString()}. Chọn e khác.</div>);
-                         setSteps(log); return;
+                    if (mode === "pq") {
+                        const bigP = BigInt(p);
+                        const bigQ = BigInt(q);
+                        bigE = BigInt(eVal);
+                        bigN = bigP * bigQ;
+                        const phi = (bigP - 1n) * (bigQ - 1n);
+                        
+                        log.push(<div>1. Tính <span className="math-font">n = p × q</span> = {bigP.toString()} × {bigQ.toString()} = <span className="font-bold">{bigN.toString()}</span></div>);
+                        log.push(<div>2. Tính <span className="math-font">φ(n) = (p-1)(q-1)</span> = {phi.toString()}</div>);
+
+                        const extendedGcdBig = (a, b) => {
+                            if (b === 0n) return { gcd: a, x: 1n, y: 0n };
+                            const { gcd: g, x: x1, y: y1 } = extendedGcdBig(b, a % b);
+                            return { gcd: g, x: y1, y: x1 - (a / b) * y1 };
+                        };
+                        const { gcd: gVal, x: dVal } = extendedGcdBig(bigE, phi);
+                        
+                        if (gVal !== 1n) {
+                             log.push(<div className="text-red-500 font-bold">LỖI: e={bigE.toString()} không nguyên tố cùng nhau với φ(n)={phi.toString()}. Chọn e khác.</div>);
+                             setSteps(log); return;
+                        }
+                        d = (dVal % phi + phi) % phi;
+                        log.push(<div>3. Tính <span className="math-font">d = e⁻¹ mod φ(n)</span> = <span className="font-bold text-red-500">{d.toString()}</span></div>);
+                        log.push(<div className="mt-2 p-2 border rounded border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700">Khóa công khai (PU): <span className="font-bold font-mono">{`{e: ${bigE.toString()}, n: ${bigN.toString()}}`}</span></div>);
+                        log.push(<div className="mt-1 p-2 border rounded border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700">Khóa bí mật (PR): <span className="font-bold font-mono">{`{d: ${d.toString()}, n: ${bigN.toString()}}`}</span></div>);
+                    } else {
+                        // Mode N given
+                        bigN = BigInt(nVal);
+                        bigE = BigInt(eVal);
+                        log.push(<div className="mt-2 p-2 border rounded border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700">Đề bài cho: <span className="font-bold font-mono">{`n = ${bigN.toString()}, e = ${bigE.toString()}`}</span></div>);
+                        if (action === 'decrypt') {
+                             log.push(<div className="text-orange-500 italic">Lưu ý: Không thể giải mã nếu chỉ biết n và e (cần p, q để tính d).</div>);
+                             setSteps(log); return;
+                        }
                     }
-                    d = (dVal % phi + phi) % phi;
-                    log.push(<div>3. Tính <span className="math-font">d = e⁻¹ mod φ(n)</span> = <span className="font-bold text-red-500">{d.toString()}</span></div>);
-                    
-                    log.push(<div className="mt-2 p-2 border rounded border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700">Khóa công khai (PU): <span className="font-bold font-mono">{`{e: ${bigE.toString()}, n: ${bigN.toString()}}`}</span></div>);
-                    log.push(<div className="mt-1 p-2 border rounded border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700">Khóa bí mật (PR): <span className="font-bold font-mono">{`{d: ${d.toString()}, n: ${bigN.toString()}}`}</span></div>);
 
-                    if (mode === 'encrypt' || mode === 'decrypt') {
+                    if (action === 'encrypt' || action === 'decrypt') {
                         if (!message) return alert("Nhập thông điệp m");
                         const m = BigInt(message);
                         
-                        if (mode === 'encrypt') {
+                        if (action === 'encrypt') {
                             log.push(<div className="mt-4 font-bold border-t pt-2 text-lg text-blue-600">🔹 Mã hóa: C = m<sup>e</sup> mod n</div>);
                             const { val, steps } = getModExpSteps(m, bigE, bigN);
                             log.push(...steps);
                             log.push(<div className="mt-2 text-xl">Kết quả: <span className="font-bold text-blue-600">{val.toString()}</span></div>);
                             setResult(val.toString());
                         } else {
-                            log.push(<div className="mt-4 font-bold border-t pt-2 text-lg text-blue-600">🔹 Giải mã: M = c<sup>d</sup> mod n</div>);
-                            const { val, steps } = getModExpSteps(m, d, bigN);
-                            log.push(...steps);
-                            log.push(<div className="mt-2 text-xl">Kết quả: <span className="font-bold text-blue-600">{val.toString()}</span></div>);
-                            setResult(val.toString());
+                            // Decrypt requires d
+                            if (d === null) {
+                                log.push(<div className="text-red-500">Chưa tính được d (cần nhập p, q).</div>);
+                            } else {
+                                log.push(<div className="mt-4 font-bold border-t pt-2 text-lg text-blue-600">🔹 Giải mã: M = c<sup>d</sup> mod n</div>);
+                                const { val, steps } = getModExpSteps(m, d, bigN);
+                                log.push(...steps);
+                                log.push(<div className="mt-2 text-xl">Kết quả: <span className="font-bold text-blue-600">{val.toString()}</span></div>);
+                                setResult(val.toString());
+                            }
                         }
                     } else {
                         setResult("");
@@ -809,18 +826,40 @@
 
             return (
                 <Section title="Hệ mật RSA">
-                    <div className="grid grid-cols-3 gap-4">
-                        <InputGroup label="p (SNT)" value={p} onChange={(e) => setP(e.target.value)} />
-                        <InputGroup label="q (SNT)" value={q} onChange={(e) => setQ(e.target.value)} />
-                        <InputGroup label="e (Public Key)" value={eVal} onChange={(e) => setE(e.target.value)} />
+                    <div className="mb-4">
+                        <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2">Chế độ nhập:</label>
+                        <div className="flex gap-4">
+                            <label className="inline-flex items-center cursor-pointer select-none">
+                                <input type="radio" className="form-radio text-blue-600" name="rsaMode" value="pq" checked={mode === 'pq'} onChange={() => setMode('pq')} />
+                                <span className="ml-2 text-gray-700 dark:text-gray-300">Nhập p, q, e (Tính d, Mã hóa & Giải mã)</span>
+                            </label>
+                            <label className="inline-flex items-center cursor-pointer select-none">
+                                <input type="radio" className="form-radio text-blue-600" name="rsaMode" value="n" checked={mode === 'n'} onChange={() => setMode('n')} />
+                                <span className="ml-2 text-gray-700 dark:text-gray-300">Nhập n, e (Chỉ Mã hóa)</span>
+                            </label>
+                        </div>
                     </div>
-                    <Button onClick={() => process('calcKeys')} variant="secondary">Tính d & Khóa</Button>
+
+                    {mode === 'pq' ? (
+                        <div className="grid grid-cols-3 gap-4">
+                            <InputGroup label="p (SNT)" value={p} onChange={(e) => setP(e.target.value)} />
+                            <InputGroup label="q (SNT)" value={q} onChange={(e) => setQ(e.target.value)} />
+                            <InputGroup label="e (Public Key)" value={eVal} onChange={(e) => setE(e.target.value)} />
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-2 gap-4">
+                            <InputGroup label="n (Modulus)" value={nVal} onChange={(e) => setNVal(e.target.value)} />
+                            <InputGroup label="e (Public Key)" value={eVal} onChange={(e) => setE(e.target.value)} />
+                        </div>
+                    )}
+
+                    {mode === 'pq' && <Button onClick={() => process('calcKeys')} variant="secondary">Tính d & Khóa</Button>}
                     
                     <div className="mt-4 border-t dark:border-gray-600 pt-4">
                         <InputGroup label="Thông điệp m / Bản mã c" value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Nhập số..." />
                         <div className="flex">
                             <Button onClick={() => process('encrypt')}>Mã hóa (m^e)</Button>
-                            <Button onClick={() => process('decrypt')} variant="secondary">Giải mã (c^d)</Button>
+                            {mode === 'pq' && <Button onClick={() => process('decrypt')} variant="secondary">Giải mã (c^d)</Button>}
                         </div>
                     </div>
                     <ResultBox result={result} steps={steps} />
