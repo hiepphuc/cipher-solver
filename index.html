@@ -90,6 +90,9 @@
             return mod(x, m);
         };
         const det2x2 = (m) => m[0][0] * m[1][1] - m[0][1] * m[1][0];
+        const adj2x2 = (m) => [[m[1][1], -m[0][1]], [-m[1][0], m[0][0]]];
+        
+        // Helper for simple modular exponentiation (internal use)
         const bigIntPowMod = (base, exp, modVal) => {
             let res = 1n;
             base = base % modVal;
@@ -482,7 +485,6 @@
 
                 let MatrixUsed = K;
                 
-                // --- THÊM PHẦN TÍNH MA TRẬN NGHỊCH ĐẢO ---
                 if (!isEncrypt && detInv !== null) {
                     log.push(<div className="font-bold mt-4 border-t pt-2 border-gray-200 dark:border-gray-700 text-blue-600 dark:text-blue-400">🔹 Tính ma trận nghịch đảo K⁻¹:</div>);
                     
@@ -533,7 +535,6 @@
                     );
                     MatrixUsed = K_inv;
                 }
-                // ---------------------------------------------
 
                 let cleanText = text.toUpperCase().replace(/[^A-Z]/g, "");
                 if (cleanText.length % 2 !== 0) {
@@ -686,6 +687,72 @@
             const [result, setResult] = useState("");
             const [steps, setSteps] = useState([]);
 
+            const getModExpSteps = (base, exp, m) => {
+                let steps = [];
+                let binaryExp = exp.toString(2);
+                
+                // Fallback for massive exponents
+                if (binaryExp.length > 50) {
+                    steps.push(<div className="text-orange-600">Số mũ quá lớn ({binaryExp.length} bits) để hiển thị chi tiết. Chỉ hiển thị kết quả.</div>);
+                    return { val: bigIntPowMod(base, exp, m), steps };
+                }
+
+                steps.push(
+                    <div className="mb-2">
+                        <div><strong>Phân tích số mũ {exp.toString()} sang nhị phân:</strong> {binaryExp}</div>
+                        <div className="text-sm text-gray-500 italic">Sử dụng thuật toán "Nhân và Bình phương" (Square and Multiply)</div>
+                    </div>
+                );
+
+                let tableRows = [];
+                let r = 1n;
+                for(let i = 0; i < binaryExp.length; i++) {
+                    let bit = binaryExp[i];
+                    let oldR = r;
+                    
+                    // Square
+                    let r_sq = (r * r) % m;
+                    let opDesc = <span>Square: {oldR.toString()}² ≡ <strong>{r_sq.toString()}</strong></span>;
+                    r = r_sq;
+                    
+                    // Multiply if bit is 1
+                    if (bit === '1') {
+                        let r_mul = (r * base) % m;
+                        opDesc = <span>{opDesc} <br/> Multiply (bit=1): {r.toString()} × {base.toString()} ≡ <strong>{r_mul.toString()}</strong></span>;
+                        r = r_mul;
+                    } else {
+                        opDesc = <span>{opDesc} <br/> (bit=0, giữ nguyên)</span>;
+                    }
+                    
+                    tableRows.push(
+                        <tr key={i} className="border-b dark:border-gray-700">
+                            <td className="p-2 border-r dark:border-gray-700 text-center">{i+1}</td>
+                            <td className="p-2 border-r dark:border-gray-700 text-center font-bold">{bit}</td>
+                            <td className="p-2">{opDesc}</td>
+                            <td className="p-2 font-bold text-blue-600 text-right">{r.toString()}</td>
+                        </tr>
+                    );
+                }
+
+                steps.push(
+                    <div className="overflow-x-auto mt-2">
+                        <table className="w-full text-sm border border-collapse dark:border-gray-700">
+                            <thead className="bg-gray-100 dark:bg-gray-800">
+                                <tr>
+                                    <th className="p-2 border border-gray-300 dark:border-gray-600">Bước</th>
+                                    <th className="p-2 border border-gray-300 dark:border-gray-600">Bit</th>
+                                    <th className="p-2 border border-gray-300 dark:border-gray-600">Phép tính (mod {m.toString()})</th>
+                                    <th className="p-2 border border-gray-300 dark:border-gray-600">Kết quả (R)</th>
+                                </tr>
+                            </thead>
+                            <tbody>{tableRows}</tbody>
+                        </table>
+                    </div>
+                );
+
+                return { val: r, steps: steps };
+            };
+
             const process = (mode) => {
                 let log = [];
                 try {
@@ -711,7 +778,6 @@
                     d = (dVal % phi + phi) % phi;
                     log.push(<div>3. Tính <span className="math-font">d = e⁻¹ mod φ(n)</span> = <span className="font-bold text-red-500">{d.toString()}</span></div>);
                     
-                    // FIXED: Correct string interpolation for PU and PR
                     log.push(<div className="mt-2 p-2 border rounded border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700">Khóa công khai (PU): <span className="font-bold font-mono">{`{e: ${bigE.toString()}, n: ${bigN.toString()}}`}</span></div>);
                     log.push(<div className="mt-1 p-2 border rounded border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700">Khóa bí mật (PR): <span className="font-bold font-mono">{`{d: ${d.toString()}, n: ${bigN.toString()}}`}</span></div>);
 
@@ -720,17 +786,17 @@
                         const m = BigInt(message);
                         
                         if (mode === 'encrypt') {
-                            const c = bigIntPowMod(m, bigE, bigN);
-                            log.push(<div className="mt-4 font-bold border-t pt-2">Mã hóa:</div>);
-                            log.push(<div><span className="math-font">C = m<sup>e</sup> mod n</span> = {m.toString()}<sup>{bigE.toString()}</sup> mod {bigN.toString()}</div>);
-                            log.push(<div>Kết quả: <span className="font-bold text-xl text-blue-600">{c.toString()}</span></div>);
-                            setResult(c.toString());
+                            log.push(<div className="mt-4 font-bold border-t pt-2 text-lg text-blue-600">🔹 Mã hóa: C = m<sup>e</sup> mod n</div>);
+                            const { val, steps } = getModExpSteps(m, bigE, bigN);
+                            log.push(...steps);
+                            log.push(<div className="mt-2 text-xl">Kết quả: <span className="font-bold text-blue-600">{val.toString()}</span></div>);
+                            setResult(val.toString());
                         } else {
-                            const dec = bigIntPowMod(m, d, bigN);
-                            log.push(<div className="mt-4 font-bold border-t pt-2">Giải mã:</div>);
-                            log.push(<div><span className="math-font">M = c<sup>d</sup> mod n</span> = {m.toString()}<sup>{d.toString()}</sup> mod {bigN.toString()}</div>);
-                            log.push(<div>Kết quả: <span className="font-bold text-xl text-blue-600">{dec.toString()}</span></div>);
-                            setResult(dec.toString());
+                            log.push(<div className="mt-4 font-bold border-t pt-2 text-lg text-blue-600">🔹 Giải mã: M = c<sup>d</sup> mod n</div>);
+                            const { val, steps } = getModExpSteps(m, d, bigN);
+                            log.push(...steps);
+                            log.push(<div className="mt-2 text-xl">Kết quả: <span className="font-bold text-blue-600">{val.toString()}</span></div>);
+                            setResult(val.toString());
                         }
                     } else {
                         setResult("");
