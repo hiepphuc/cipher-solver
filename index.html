@@ -35,13 +35,13 @@
         .transition-colors { transition-property: background-color, border-color, color, fill, stroke; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 300ms; }
     </style>
 </head>
-<body class="bg-gray-100 dark:bg-gray-900 transition-colors duration-300">
+<body class="bg-gray-100 dark:bg-gray-900 transition-colors duration-300 text-gray-900 dark:text-gray-100">
     <div id="root"></div>
 
     <script type="text/babel">
         const { useState, useEffect } = React;
 
-        // --- Icons (Thay thế lucide-react bằng SVG trực tiếp) ---
+        // --- Icons (Inline SVGs để không cần thư viện ngoài) ---
         const SunIcon = () => (
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-yellow-500">
                 <circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41-1.41"/><path d="m19.07 4.93-1.41 1.41"/>
@@ -415,6 +415,7 @@
             const [text, setText] = useState("");
             const [k00, setK00] = useState(""); const [k01, setK01] = useState("");
             const [k10, setK10] = useState(""); const [k11, setK11] = useState("");
+            const [multiplyMode, setMultiplyMode] = useState("Kx"); // 'Kx' (Matrix*Col) or 'xK' (Row*Matrix)
             const [result, setResult] = useState("");
             const [steps, setSteps] = useState("");
 
@@ -456,17 +457,34 @@
                     log.push("Đã thêm ký tự đệm 'X' vào cuối để đủ cặp.");
                 }
 
+                log.push(`\n--- Bắt đầu tính toán (${multiplyMode === 'Kx' ? 'Ma trận x Vector Cột' : 'Vector Hàng x Ma trận'}) ---`);
+
                 for(let i=0; i<cleanText.length; i+=2) {
                     let v1 = alphabet.indexOf(cleanText[i]);
                     let v2 = alphabet.indexOf(cleanText[i+1]);
                     
-                    log.push(`\nCặp: ${cleanText[i]}(${v1}), ${cleanText[i+1]}(${v2}) -> Vector [${v1}, ${v2}]^T`);
-                    
-                    let c1 = mod(MatrixUsed[0][0]*v1 + MatrixUsed[0][1]*v2, 26);
-                    let c2 = mod(MatrixUsed[1][0]*v1 + MatrixUsed[1][1]*v2, 26);
+                    let c1, c2;
 
-                    log.push(`Tính: [${MatrixUsed[0][0]}*${v1} + ${MatrixUsed[0][1]}*${v2}] mod 26 = ${c1} (${alphabet[c1]})`);
-                    log.push(`Tính: [${MatrixUsed[1][0]}*${v1} + ${MatrixUsed[1][1]}*${v2}] mod 26 = ${c2} (${alphabet[c2]})`);
+                    if (multiplyMode === 'Kx') {
+                        // y = K * x (Cột)
+                        log.push(`\nCặp: ${cleanText[i]}(${v1}), ${cleanText[i+1]}(${v2}) -> Vector Cột [${v1}, ${v2}]^T`);
+                        
+                        c1 = mod(MatrixUsed[0][0]*v1 + MatrixUsed[0][1]*v2, 26);
+                        c2 = mod(MatrixUsed[1][0]*v1 + MatrixUsed[1][1]*v2, 26);
+
+                        log.push(`Hàng 1: [${MatrixUsed[0][0]}*${v1} + ${MatrixUsed[0][1]}*${v2}] mod 26 = ${c1} (${alphabet[c1]})`);
+                        log.push(`Hàng 2: [${MatrixUsed[1][0]}*${v1} + ${MatrixUsed[1][1]}*${v2}] mod 26 = ${c2} (${alphabet[c2]})`);
+
+                    } else {
+                        // y = x * K (Hàng)
+                        log.push(`\nCặp: ${cleanText[i]}(${v1}), ${cleanText[i+1]}(${v2}) -> Vector Hàng [${v1}, ${v2}]`);
+                        
+                        c1 = mod(v1*MatrixUsed[0][0] + v2*MatrixUsed[1][0], 26);
+                        c2 = mod(v1*MatrixUsed[0][1] + v2*MatrixUsed[1][1], 26);
+
+                        log.push(`Cột 1: [${v1}*${MatrixUsed[0][0]} + ${v2}*${MatrixUsed[1][0]}] mod 26 = ${c1} (${alphabet[c1]})`);
+                        log.push(`Cột 2: [${v1}*${MatrixUsed[0][1]} + ${v2}*${MatrixUsed[1][1]}] mod 26 = ${c2} (${alphabet[c2]})`);
+                    }
                     
                     output += alphabet[c1] + alphabet[c2];
                 }
@@ -478,6 +496,34 @@
             return (
                 <Section title="Mã Hill (Ma trận 2x2)">
                     <InputGroup label="Văn bản" value={text} onChange={(e) => setText(e.target.value)} />
+                    <div className="mb-4">
+                        <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2">Kiểu nhân ma trận:</label>
+                        <div className="flex gap-4">
+                            <label className="inline-flex items-center cursor-pointer">
+                                <input 
+                                    type="radio" 
+                                    className="form-radio text-blue-600 focus:ring-blue-500" 
+                                    name="hillMode" 
+                                    value="Kx" 
+                                    checked={multiplyMode === 'Kx'} 
+                                    onChange={() => setMultiplyMode('Kx')}
+                                />
+                                <span className="ml-2 text-gray-700 dark:text-gray-300">y = Kx (Ma trận x Cột - Chuẩn Toán học)</span>
+                            </label>
+                            <label className="inline-flex items-center cursor-pointer">
+                                <input 
+                                    type="radio" 
+                                    className="form-radio text-blue-600 focus:ring-blue-500" 
+                                    name="hillMode" 
+                                    value="xK" 
+                                    checked={multiplyMode === 'xK'} 
+                                    onChange={() => setMultiplyMode('xK')}
+                                />
+                                <span className="ml-2 text-gray-700 dark:text-gray-300">y = xK (Hàng x Ma trận)</span>
+                            </label>
+                        </div>
+                    </div>
+
                     <div className="mb-4">
                         <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2">Ma trận khóa:</label>
                         <div className="grid grid-cols-2 gap-2 w-32">
@@ -752,7 +798,7 @@
                     </div>
 
                     <main>
-                        {/* Giữ nguyên state khi chuyển tab */}
+                        {/* Giữ nguyên state khi chuyển tab bằng CSS display */}
                         <div style={{ display: activeTab === 'caesar' ? 'block' : 'none' }}><CaesarCipher /></div>
                         <div style={{ display: activeTab === 'vigenere' ? 'block' : 'none' }}><VigenereCipher /></div>
                         <div style={{ display: activeTab === 'playfair' ? 'block' : 'none' }}><PlayfairCipher /></div>
