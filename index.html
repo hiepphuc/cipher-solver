@@ -38,7 +38,7 @@
         .step-row:nth-child(even) { background-color: rgba(0, 0, 0, 0.02); }
         .dark .step-row:nth-child(even) { background-color: rgba(255, 255, 255, 0.05); }
         
-        /* Custom scrollbar for modal */
+        /* Custom scrollbar */
         .custom-scrollbar::-webkit-scrollbar { width: 8px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 4px; }
@@ -188,28 +188,18 @@
                         )}
                     </div>
 
-                    {/* EXPANDED MODAL */}
                     {isExpanded && (
                         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
                             <div className="bg-white dark:bg-gray-900 w-full max-w-5xl h-[90vh] rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
-                                {/* Header */}
                                 <div className="p-4 border-b dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-800">
                                     <h3 className="text-xl font-bold text-gray-800 dark:text-white">Lời giải chi tiết</h3>
-                                    <button 
-                                        onClick={() => setIsExpanded(false)}
-                                        className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full text-gray-500 dark:text-gray-400 transition-colors"
-                                    >
-                                        <CloseIcon />
-                                    </button>
+                                    <button onClick={() => setIsExpanded(false)} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full text-gray-500 dark:text-gray-400 transition-colors"><CloseIcon /></button>
                                 </div>
-                                
-                                {/* Content */}
                                 <div className="flex-1 overflow-y-auto p-6 custom-scrollbar bg-white dark:bg-gray-900">
                                     <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800">
                                         <span className="font-bold text-blue-800 dark:text-blue-300 mr-2">KẾT QUẢ CUỐI CÙNG:</span>
                                         <span className="font-mono text-xl font-bold text-gray-900 dark:text-white">{result}</span>
                                     </div>
-                                    
                                     <div className="space-y-1">
                                         {steps.map((step, idx) => (
                                             <div key={idx} className="step-row p-3 rounded text-base md:text-lg text-gray-800 dark:text-gray-200 border-b border-gray-100 dark:border-gray-800">
@@ -225,7 +215,7 @@
             );
         };
 
-        // --- Cipher Logic Modules ---
+        // --- Cipher Modules ---
 
         const CaesarCipher = () => {
             const [text, setText] = useState("");
@@ -385,7 +375,6 @@
                 let log = [];
                 const matrix = generateMatrix(key);
                 
-                // Render Matrix
                 log.push(
                     <div className="mb-4">
                         <div className="font-bold mb-1">Ma trận khóa (5x5):</div>
@@ -497,7 +486,6 @@
                 if (!isEncrypt && detInv !== null) {
                     log.push(<div className="font-bold mt-4 border-t pt-2 border-gray-200 dark:border-gray-700 text-blue-600 dark:text-blue-400">🔹 Tính ma trận nghịch đảo K⁻¹:</div>);
                     
-                    // 1. Ma trận phụ hợp (Adjugate)
                     let adj = [
                         [K[1][1], -K[0][1]],
                         [-K[1][0], K[0][0]]
@@ -512,7 +500,6 @@
                         </div>
                     );
 
-                    // 2. Nhân với nghịch đảo định thức
                     log.push(
                         <div className="mt-2 flex items-center flex-wrap gap-2">
                             <span>2. K⁻¹ = Det(K)⁻¹ × Adj(K) = {detInv} × </span>
@@ -521,7 +508,6 @@
                         </div>
                     );
 
-                    // 3. Tính toán chi tiết từng phần tử
                     let val_00 = detInv * adj[0][0], cal_00 = `${detInv}×${adj[0][0]}`;
                     let val_01 = detInv * adj[0][1], cal_01 = `${detInv}×(${adj[0][1]})`;
                     let val_10 = detInv * adj[1][0], cal_10 = `${detInv}×(${adj[1][0]})`;
@@ -564,7 +550,6 @@
                     let c1, c2;
 
                     if (multiplyMode === 'Kx') {
-                        // y = K * x (Col)
                         log.push(
                             <div className="mt-4 font-bold flex items-center flex-wrap">
                                 Cặp: '{cleanText[i]}'({v1}), '{cleanText[i+1]}'({v2}) &rarr; Vector <MatrixDisplay matrix={[[v1], [v2]]} />
@@ -581,7 +566,6 @@
                         log.push(<div className="ml-4">Hàng 2: [{cal2}] = {MatrixUsed[1][0]*v1 + MatrixUsed[1][1]*v2} &equiv; <span className="font-bold text-red-500">{c2} ({alphabet[c2]})</span></div>);
 
                     } else {
-                        // y = x * K (Row)
                         log.push(
                             <div className="mt-4 font-bold">
                                 Cặp: '{cleanText[i]}'({v1}), '{cleanText[i+1]}'({v2}) &rarr; Vector [{v1}, {v2}]
@@ -726,8 +710,10 @@
                     }
                     d = (dVal % phi + phi) % phi;
                     log.push(<div>3. Tính <span className="math-font">d = e⁻¹ mod φ(n)</span> = <span className="font-bold text-red-500">{d.toString()}</span></div>);
-                    log.push(<div className="mt-2 p-2 border rounded border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700">Khóa công khai (PU): <span className="font-bold">{{e: bigE.toString(), n: bigN.toString()}}</span></div>);
-                    log.push(<div className="mt-1 p-2 border rounded border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700">Khóa bí mật (PR): <span className="font-bold">{{d: d.toString(), n: bigN.toString()}}</span></div>);
+                    
+                    // FIXED: Correct string interpolation for PU and PR
+                    log.push(<div className="mt-2 p-2 border rounded border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700">Khóa công khai (PU): <span className="font-bold font-mono">{`{e: ${bigE.toString()}, n: ${bigN.toString()}}`}</span></div>);
+                    log.push(<div className="mt-1 p-2 border rounded border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700">Khóa bí mật (PR): <span className="font-bold font-mono">{`{d: ${d.toString()}, n: ${bigN.toString()}}`}</span></div>);
 
                     if (mode === 'encrypt' || mode === 'decrypt') {
                         if (!message) return alert("Nhập thông điệp m");
