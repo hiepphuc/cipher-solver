@@ -24,6 +24,9 @@
                             input: '#374151',
                             border: '#4b5563'
                         }
+                    },
+                    fontFamily: {
+                        math: ['"Times New Roman"', 'serif']
                     }
                 }
             }
@@ -31,7 +34,24 @@
     </script>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        .step-log { font-family: 'Courier New', Courier, monospace; white-space: pre-wrap; }
+        .math-font { font-family: 'Times New Roman', serif; font-style: italic; }
+        .step-row:nth-child(even) { background-color: rgba(0, 0, 0, 0.02); }
+        .dark .step-row:nth-child(even) { background-color: rgba(255, 255, 255, 0.05); }
+        
+        /* Custom scrollbar for modal */
+        .custom-scrollbar::-webkit-scrollbar { width: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 4px; }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #4b5563; }
+        
+        .matrix-bracket {
+            border-left: 2px solid currentColor;
+            border-right: 2px solid currentColor;
+            border-radius: 4px;
+            padding: 0 4px;
+            display: inline-block;
+            vertical-align: middle;
+        }
         .transition-colors { transition-property: background-color, border-color, color, fill, stroke; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 300ms; }
     </style>
 </head>
@@ -41,23 +61,23 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
 
-        // --- Icons (Inline SVGs để không cần thư viện ngoài) ---
+        // --- Icons ---
         const SunIcon = () => (
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-yellow-500">
-                <circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41-1.41"/><path d="m19.07 4.93-1.41 1.41"/>
-            </svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-yellow-500"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41-1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
         );
-
         const MoonIcon = () => (
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500">
-                <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
-            </svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+        );
+        const ExpandIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 15 6 6"/><path d="m15 9 6-6"/><path d="M21 16.2V21h-4.8"/><path d="M21 7.8V3h-4.8"/><path d="M3 21h4.8v-4.8"/><path d="m3 21 6-6"/><path d="M3 3h4.8v4.8"/><path d="m9 9-6-6"/></svg>
+        );
+        const CloseIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
         );
 
-        // --- Hàm Tiện Ích ---
+        // --- Utility Functions ---
         const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
         const mod = (n, m) => ((n % m) + m) % m;
-        
         const gcd = (a, b) => b === 0 ? a : gcd(b, a % b);
         const extendedGcd = (a, b) => {
             if (b === 0) return { gcd: a, x: 1, y: 0 };
@@ -69,10 +89,7 @@
             if (g !== 1) return null;
             return mod(x, m);
         };
-
         const det2x2 = (m) => m[0][0] * m[1][1] - m[0][1] * m[1][0];
-        const adj2x2 = (m) => [[m[1][1], -m[0][1]], [-m[1][0], m[0][0]]];
-
         const bigIntPowMod = (base, exp, modVal) => {
             let res = 1n;
             base = base % modVal;
@@ -84,7 +101,7 @@
             return res;
         };
 
-        // --- Components Giao Diện Chung ---
+        // --- Components ---
 
         const Section = ({ title, children }) => (
             <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md mb-6 transition-colors duration-300">
@@ -120,56 +137,130 @@
             )
         };
 
-        const ResultBox = ({ result, steps }) => (
-            <div className="mt-6 bg-gray-100 dark:bg-gray-700 p-4 rounded border border-gray-300 dark:border-gray-600 transition-colors duration-300">
-                <h3 className="font-bold text-lg mb-2 text-gray-800 dark:text-gray-200">Kết quả:</h3>
-                <div className="text-xl font-mono text-blue-800 dark:text-blue-300 break-all bg-white dark:bg-gray-800 p-2 rounded mb-4 border dark:border-gray-600 transition-colors duration-300">{result}</div>
-                {steps && (
-                    <>
-                        <h4 className="font-bold text-md mb-2 text-gray-700 dark:text-gray-300">Lời giải chi tiết:</h4>
-                        <div className="step-log text-sm text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800 p-2 rounded border dark:border-gray-600 max-h-60 overflow-y-auto transition-colors duration-300 whitespace-pre-wrap">
-                            {steps}
-                        </div>
-                    </>
-                )}
+        const MatrixDisplay = ({ matrix }) => (
+            <div className="inline-block align-middle mx-1">
+                <div className="matrix-bracket">
+                    <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-center font-mono">
+                        <div>{matrix[0][0]}</div><div>{matrix[0][1]}</div>
+                        <div>{matrix[1][0]}</div><div>{matrix[1][1]}</div>
+                    </div>
+                </div>
             </div>
         );
 
-        // --- Các Module Mật Mã ---
+        const ResultBox = ({ result, steps }) => {
+            const [isExpanded, setIsExpanded] = useState(false);
+
+            useEffect(() => {
+                if (isExpanded) document.body.style.overflow = 'hidden';
+                else document.body.style.overflow = 'unset';
+                return () => { document.body.style.overflow = 'unset'; }
+            }, [isExpanded]);
+
+            if (!result && (!steps || steps.length === 0)) return null;
+
+            return (
+                <>
+                    <div className="mt-6 bg-gray-50 dark:bg-gray-700 p-4 rounded-lg border border-gray-200 dark:border-gray-600 transition-colors duration-300">
+                        <h3 className="font-bold text-lg mb-2 text-gray-800 dark:text-gray-200">Kết quả:</h3>
+                        <div className="text-xl font-mono text-blue-800 dark:text-blue-300 break-all bg-white dark:bg-gray-800 p-3 rounded mb-4 border dark:border-gray-600 shadow-sm">{result}</div>
+                        
+                        {steps && steps.length > 0 && (
+                            <div>
+                                <div className="flex justify-between items-center mb-2">
+                                    <h4 className="font-bold text-md text-gray-700 dark:text-gray-300">Lời giải chi tiết:</h4>
+                                    <button 
+                                        onClick={() => setIsExpanded(true)}
+                                        className="flex items-center gap-1 text-xs font-semibold bg-blue-100 hover:bg-blue-200 dark:bg-blue-900 dark:hover:bg-blue-800 text-blue-700 dark:text-blue-200 px-2 py-1 rounded transition-colors"
+                                        title="Phóng to"
+                                    >
+                                        <ExpandIcon /> Phóng to
+                                    </button>
+                                </div>
+                                <div className="text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 p-2 rounded border dark:border-gray-600 max-h-60 overflow-y-auto custom-scrollbar font-mono">
+                                    {steps.map((step, idx) => (
+                                        <div key={idx} className="step-row py-1 px-1 border-b border-gray-100 dark:border-gray-700 last:border-0">
+                                            {step}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* EXPANDED MODAL */}
+                    {isExpanded && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                            <div className="bg-white dark:bg-gray-900 w-full max-w-5xl h-[90vh] rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
+                                {/* Header */}
+                                <div className="p-4 border-b dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-800">
+                                    <h3 className="text-xl font-bold text-gray-800 dark:text-white">Lời giải chi tiết</h3>
+                                    <button 
+                                        onClick={() => setIsExpanded(false)}
+                                        className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full text-gray-500 dark:text-gray-400 transition-colors"
+                                    >
+                                        <CloseIcon />
+                                    </button>
+                                </div>
+                                
+                                {/* Content */}
+                                <div className="flex-1 overflow-y-auto p-6 custom-scrollbar bg-white dark:bg-gray-900">
+                                    <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800">
+                                        <span className="font-bold text-blue-800 dark:text-blue-300 mr-2">KẾT QUẢ CUỐI CÙNG:</span>
+                                        <span className="font-mono text-xl font-bold text-gray-900 dark:text-white">{result}</span>
+                                    </div>
+                                    
+                                    <div className="space-y-1">
+                                        {steps.map((step, idx) => (
+                                            <div key={idx} className="step-row p-3 rounded text-base md:text-lg text-gray-800 dark:text-gray-200 border-b border-gray-100 dark:border-gray-800">
+                                                {step}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </>
+            );
+        };
+
+        // --- Cipher Logic Modules ---
 
         const CaesarCipher = () => {
             const [text, setText] = useState("");
             const [key, setKey] = useState(3);
             const [result, setResult] = useState("");
-            const [steps, setSteps] = useState("");
+            const [steps, setSteps] = useState([]);
 
             const process = (isEncrypt) => {
                 let log = [];
-                let output = "";
                 const k = parseInt(key);
                 if (isNaN(k)) return alert("Khóa k phải là số nguyên");
 
-                log.push(`Công thức ${isEncrypt ? "Mã hóa" : "Giải mã"}: C = (P ${isEncrypt ? "+" : "-"} k) mod 26`);
-                log.push(`Khóa k = ${k}`);
+                log.push(<div className="font-bold text-blue-600">🔹 Công thức: C = (P {isEncrypt ? "+" : "-"} k) mod 26</div>);
+                log.push(<div>Khóa <span className="math-font">k</span> = {k}</div>);
 
+                let output = "";
                 const cleanText = text.toUpperCase().replace(/[^A-Z]/g, "");
                 
                 for (let i = 0; i < cleanText.length; i++) {
                     const char = cleanText[i];
                     const pIdx = alphabet.indexOf(char);
-                    let cIdx;
+                    let cIdx, formula;
                     
                     if (isEncrypt) {
                         cIdx = mod(pIdx + k, 26);
-                        log.push(`'${char}'(${pIdx}) + ${k} = ${pIdx+k} ≡ ${cIdx} mod 26 -> '${alphabet[cIdx]}'`);
+                        formula = <span>'<span className="font-bold">{char}</span>'({pIdx}) + {k} = {pIdx+k} &equiv; {cIdx} (mod 26) &rarr; '<span className="font-bold text-red-500">{alphabet[cIdx]}</span>'</span>;
                     } else {
                         cIdx = mod(pIdx - k, 26);
-                        log.push(`'${char}'(${pIdx}) - ${k} = ${pIdx-k} ≡ ${cIdx} mod 26 -> '${alphabet[cIdx]}'`);
+                        formula = <span>'<span className="font-bold">{char}</span>'({pIdx}) - {k} = {pIdx-k} &equiv; {cIdx} (mod 26) &rarr; '<span className="font-bold text-red-500">{alphabet[cIdx]}</span>'</span>;
                     }
+                    log.push(formula);
                     output += alphabet[cIdx];
                 }
                 setResult(output);
-                setSteps(log.join("\n"));
+                setSteps(log);
             };
 
             return (
@@ -180,7 +271,7 @@
                         <Button onClick={() => process(true)}>Mã hóa</Button>
                         <Button onClick={() => process(false)} variant="secondary">Giải mã</Button>
                     </div>
-                    {result && <ResultBox result={result} steps={steps} />}
+                    <ResultBox result={result} steps={steps} />
                 </Section>
             );
         };
@@ -191,11 +282,10 @@
             const [key2, setKey2] = useState("");
             const [useTwoKeys, setUseTwoKeys] = useState(false);
             const [result, setResult] = useState("");
-            const [steps, setSteps] = useState("");
+            const [steps, setSteps] = useState([]);
 
             const process = (isEncrypt) => {
                 let log = [];
-                let output = "";
                 const cleanText = text.toUpperCase().replace(/[^A-Z]/g, "");
                 const cleanKey1 = key1.toUpperCase().replace(/[^A-Z]/g, "");
                 const cleanKey2 = key2.toUpperCase().replace(/[^A-Z]/g, "");
@@ -203,88 +293,74 @@
                 if (!cleanKey1) return alert("Vui lòng nhập Khóa 1");
                 if (useTwoKeys && !cleanKey2) return alert("Vui lòng nhập Khóa 2");
 
-                log.push(`Văn bản (P): ${cleanText}`);
-                log.push(`Khóa 1 (K1): ${cleanKey1}`);
-                if (useTwoKeys) log.push(`Khóa 2 (K2): ${cleanKey2}`);
-                log.push("-".repeat(40));
+                log.push(<div className="font-bold">Văn bản P: {cleanText}</div>);
+                log.push(<div>Khóa K1: {cleanKey1}</div>);
+                if (useTwoKeys) log.push(<div>Khóa K2: {cleanKey2}</div>);
+                
+                let formulaStr = isEncrypt 
+                    ? `C = (P + K1 ${useTwoKeys ? '+ K2' : ''}) mod 26`
+                    : `P = (C - K1 ${useTwoKeys ? '- K2' : ''}) mod 26`;
+                log.push(<div className="font-bold text-blue-600 mb-2">🔹 Công thức: {formulaStr}</div>);
 
-                if (useTwoKeys) {
-                    log.push(`Chế độ 2 Khóa: C = (P + K1 + K2) mod 26 (Mã hóa)`);
-                    log.push(`               P = (C - K1 - K2) mod 26 (Giải mã)`);
-                }
-
+                let output = "";
                 for (let i = 0; i < cleanText.length; i++) {
                     const char = cleanText[i];
                     const pIdx = alphabet.indexOf(char);
-                    
                     const k1Char = cleanKey1[i % cleanKey1.length];
                     const k1Idx = alphabet.indexOf(k1Char);
 
-                    let k2Idx = 0;
-                    let k2Char = '';
+                    let k2Idx = 0, k2Char = '';
                     if (useTwoKeys) {
                         k2Char = cleanKey2[i % cleanKey2.length];
                         k2Idx = alphabet.indexOf(k2Char);
                     }
                     
-                    let cIdx;
-                    let formula = "";
-                    
+                    let cIdx, calc;
                     if (isEncrypt) {
-                        // C = P + K1 (+ K2)
                         cIdx = mod(pIdx + k1Idx + k2Idx, 26);
-                        if (useTwoKeys) {
-                            formula = `'${char}'(${pIdx}) + '${k1Char}'(${k1Idx}) + '${k2Char}'(${k2Idx}) = ${pIdx+k1Idx+k2Idx} ≡ ${cIdx}`;
-                        } else {
-                            formula = `'${char}'(${pIdx}) + '${k1Char}'(${k1Idx}) = ${pIdx+k1Idx} ≡ ${cIdx}`;
-                        }
+                        let sum = pIdx + k1Idx + k2Idx;
+                        calc = `${pIdx} + ${k1Idx}${useTwoKeys ? ` + ${k2Idx}` : ''} = ${sum}`;
                     } else {
-                        // P = C - K1 (- K2)
                         cIdx = mod(pIdx - k1Idx - k2Idx, 26);
-                        if (useTwoKeys) {
-                            formula = `'${char}'(${pIdx}) - '${k1Char}'(${k1Idx}) - '${k2Char}'(${k2Idx}) = ${pIdx-k1Idx-k2Idx} ≡ ${cIdx}`;
-                        } else {
-                            formula = `'${char}'(${pIdx}) - '${k1Char}'(${k1Idx}) = ${pIdx-k1Idx} ≡ ${cIdx}`;
-                        }
+                        let diff = pIdx - k1Idx - k2Idx;
+                        calc = `${pIdx} - ${k1Idx}${useTwoKeys ? ` - ${k2Idx}` : ''} = ${diff}`;
                     }
-                    log.push(`[${i+1}] ${formula} -> '${alphabet[cIdx]}'`);
+                    
+                    log.push(
+                        <div className="flex flex-wrap gap-2 items-center">
+                            <span className="w-6 font-bold text-gray-500">[{i+1}]</span>
+                            <span>'<span className="font-bold">{char}</span>'</span>
+                            <span className="text-gray-400">&rarr;</span>
+                            <span className="font-mono text-sm">{calc} &equiv; {cIdx}</span>
+                            <span className="text-gray-400">&rarr;</span>
+                            <span className="font-bold text-red-500">'{alphabet[cIdx]}'</span>
+                            <span className="text-xs text-gray-400 ml-2">(K1:'{k1Char}'{useTwoKeys ? `, K2:'${k2Char}'` : ''})</span>
+                        </div>
+                    );
                     output += alphabet[cIdx];
                 }
                 setResult(output);
-                setSteps(log.join("\n"));
+                setSteps(log);
             };
 
             return (
                 <Section title="Mã Vigenere (1 & 2 Khóa)">
                     <div className="mb-4">
-                        <label className="flex items-center space-x-2 cursor-pointer">
-                            <input 
-                                type="checkbox" 
-                                checked={useTwoKeys} 
-                                onChange={(e) => setUseTwoKeys(e.target.checked)}
-                                className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 border-gray-300 dark:border-gray-500"
-                            />
+                        <label className="flex items-center space-x-2 cursor-pointer select-none">
+                            <input type="checkbox" checked={useTwoKeys} onChange={(e) => setUseTwoKeys(e.target.checked)} className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 border-gray-300 dark:border-gray-500" />
                             <span className="text-gray-700 dark:text-gray-300 font-bold ml-2">Sử dụng 2 khóa (Vigenere 2 Key)</span>
                         </label>
                     </div>
-                    
                     <InputGroup label="Văn bản" value={text} onChange={(e) => setText(e.target.value)} />
                     <div className="flex gap-4">
-                        <div className="flex-1">
-                            <InputGroup label="Khóa 1 (K1)" value={key1} onChange={(e) => setKey1(e.target.value)} />
-                        </div>
-                        {useTwoKeys && (
-                            <div className="flex-1">
-                                <InputGroup label="Khóa 2 (K2)" value={key2} onChange={(e) => setKey2(e.target.value)} />
-                            </div>
-                        )}
+                        <div className="flex-1"><InputGroup label="Khóa 1 (K1)" value={key1} onChange={(e) => setKey1(e.target.value)} /></div>
+                        {useTwoKeys && <div className="flex-1"><InputGroup label="Khóa 2 (K2)" value={key2} onChange={(e) => setKey2(e.target.value)} /></div>}
                     </div>
-                    
                     <div className="flex">
                         <Button onClick={() => process(true)}>Mã hóa</Button>
                         <Button onClick={() => process(false)} variant="secondary">Giải mã</Button>
                     </div>
-                    {result && <ResultBox result={result} steps={steps} />}
+                    <ResultBox result={result} steps={steps} />
                 </Section>
             );
         };
@@ -293,41 +369,33 @@
             const [text, setText] = useState("");
             const [key, setKey] = useState("");
             const [result, setResult] = useState("");
-            const [steps, setSteps] = useState("");
+            const [steps, setSteps] = useState([]);
 
             const generateMatrix = (k) => {
                 let matrix = [];
                 let seen = new Set();
                 let kClean = k.toUpperCase().replace(/[^A-Z]/g, "").replace(/J/g, "I");
-                
-                for(let c of kClean) {
-                    if(!seen.has(c)) {
-                        seen.add(c);
-                        matrix.push(c);
-                    }
-                }
-                for(let c of alphabet) {
-                    if(c !== 'J' && !seen.has(c)) {
-                        seen.add(c);
-                        matrix.push(c);
-                    }
-                }
+                for(let c of kClean) { if(!seen.has(c)) { seen.add(c); matrix.push(c); } }
+                for(let c of alphabet) { if(c !== 'J' && !seen.has(c)) { seen.add(c); matrix.push(c); } }
                 return matrix;
-            };
-
-            const formatMatrix = (m) => {
-                let s = "Ma trận khóa:\n";
-                for(let i=0; i<5; i++) {
-                    s += m.slice(i*5, i*5+5).join(" ") + "\n";
-                }
-                return s;
             };
 
             const process = (isEncrypt) => {
                 if(!key) return alert("Nhập khóa");
                 let log = [];
                 const matrix = generateMatrix(key);
-                log.push(formatMatrix(matrix));
+                
+                // Render Matrix
+                log.push(
+                    <div className="mb-4">
+                        <div className="font-bold mb-1">Ma trận khóa (5x5):</div>
+                        <div className="inline-block border-2 border-gray-800 dark:border-gray-300 p-1 rounded">
+                            <div className="grid grid-cols-5 gap-1 text-center font-mono">
+                                {matrix.map((c, i) => <div key={i} className="w-6 h-6 leading-6 bg-gray-200 dark:bg-gray-700">{c}</div>)}
+                            </div>
+                        </div>
+                    </div>
+                );
 
                 let cleanText = text.toUpperCase().replace(/[^A-Z]/g, "").replace(/J/g, "I");
                 let pairs = [];
@@ -336,66 +404,46 @@
                     for(let i=0; i<cleanText.length; i++) {
                         let c1 = cleanText[i];
                         let c2 = (i+1 < cleanText.length) ? cleanText[i+1] : 'X';
-                        
-                        if(c1 === c2) {
-                            pairs.push([c1, 'X']);
-                        } else {
-                            pairs.push([c1, c2]);
-                            i++;
-                        }
+                        if(c1 === c2) { pairs.push([c1, 'X']); } 
+                        else { pairs.push([c1, c2]); i++; }
                     }
-                    if(pairs.length > 0 && pairs[pairs.length-1].length === 1) {
-                         pairs[pairs.length-1].push('X');
-                    }
+                    if(pairs.length > 0 && pairs[pairs.length-1].length === 1) pairs[pairs.length-1].push('X');
                 } else {
-                    for(let i=0; i<cleanText.length; i+=2) {
-                        pairs.push([cleanText[i], cleanText[i+1] || 'X']);
-                    }
+                    for(let i=0; i<cleanText.length; i+=2) pairs.push([cleanText[i], cleanText[i+1] || 'X']);
                 }
 
-                log.push(`Các cặp ký tự: ${pairs.map(p => p.join("")).join(" ")}`);
-                
                 let output = "";
-                
-                pairs.forEach(pair => {
+                pairs.forEach((pair, idx) => {
                     let [c1, c2] = pair;
-                    let idx1 = matrix.indexOf(c1);
-                    let idx2 = matrix.indexOf(c2);
+                    let idx1 = matrix.indexOf(c1), idx2 = matrix.indexOf(c2);
                     let r1 = Math.floor(idx1 / 5), c1_pos = idx1 % 5;
                     let r2 = Math.floor(idx2 / 5), c2_pos = idx2 % 5;
-                    
                     let res1, res2, rule;
 
-                    if (r1 === r2) { // Same Row
-                        rule = "Cùng hàng -> Dịch phải (Encrypt) / Dịch trái (Decrypt)";
-                        if (isEncrypt) {
-                            res1 = matrix[r1 * 5 + (c1_pos + 1) % 5];
-                            res2 = matrix[r2 * 5 + (c2_pos + 1) % 5];
-                        } else {
-                            res1 = matrix[r1 * 5 + mod(c1_pos - 1, 5)];
-                            res2 = matrix[r2 * 5 + mod(c2_pos - 1, 5)];
-                        }
-                    } else if (c1_pos === c2_pos) { // Same Col
-                        rule = "Cùng cột -> Dịch xuống (Encrypt) / Dịch lên (Decrypt)";
-                        if (isEncrypt) {
-                            res1 = matrix[((r1 + 1) % 5) * 5 + c1_pos];
-                            res2 = matrix[((r2 + 1) % 5) * 5 + c2_pos];
-                        } else {
-                            res1 = matrix[mod(r1 - 1, 5) * 5 + c1_pos];
-                            res2 = matrix[mod(r2 - 1, 5) * 5 + c2_pos];
-                        }
-                    } else { // Rectangle
-                        rule = "Hình chữ nhật -> Lấy giao điểm";
+                    if (r1 === r2) { 
+                        rule = isEncrypt ? "Cùng hàng (Dịch phải)" : "Cùng hàng (Dịch trái)";
+                        res1 = matrix[r1 * 5 + mod(c1_pos + (isEncrypt?1:-1), 5)];
+                        res2 = matrix[r2 * 5 + mod(c2_pos + (isEncrypt?1:-1), 5)];
+                    } else if (c1_pos === c2_pos) {
+                        rule = isEncrypt ? "Cùng cột (Dịch xuống)" : "Cùng cột (Dịch lên)";
+                        res1 = matrix[mod(r1 + (isEncrypt?1:-1), 5) * 5 + c1_pos];
+                        res2 = matrix[mod(r2 + (isEncrypt?1:-1), 5) * 5 + c2_pos];
+                    } else {
+                        rule = "Hình chữ nhật (Giao điểm)";
                         res1 = matrix[r1 * 5 + c2_pos];
                         res2 = matrix[r2 * 5 + c1_pos];
                     }
 
-                    log.push(`${c1}${c2} -> ${res1}${res2} (${rule})`);
+                    log.push(
+                        <div key={idx}>
+                            <span className="font-bold">{c1}{c2}</span> &rarr; <span className="font-bold text-red-500">{res1}{res2}</span> 
+                            <span className="text-sm text-gray-500 ml-2 italic">({rule})</span>
+                        </div>
+                    );
                     output += res1 + res2;
                 });
-
                 setResult(output);
-                setSteps(log.join("\n"));
+                setSteps(log);
             };
 
             return (
@@ -406,7 +454,7 @@
                         <Button onClick={() => process(true)}>Mã hóa</Button>
                         <Button onClick={() => process(false)} variant="secondary">Giải mã</Button>
                     </div>
-                    {result && <ResultBox result={result} steps={steps} />}
+                    <ResultBox result={result} steps={steps} />
                 </Section>
             );
         };
@@ -415,82 +463,144 @@
             const [text, setText] = useState("");
             const [k00, setK00] = useState(""); const [k01, setK01] = useState("");
             const [k10, setK10] = useState(""); const [k11, setK11] = useState("");
-            const [multiplyMode, setMultiplyMode] = useState("Kx"); // 'Kx' (Matrix*Col) or 'xK' (Row*Matrix)
+            const [multiplyMode, setMultiplyMode] = useState("Kx");
             const [result, setResult] = useState("");
-            const [steps, setSteps] = useState("");
+            const [steps, setSteps] = useState([]);
 
             const process = (isEncrypt) => {
                 let log = [];
-                let output = "";
                 let K = [[parseInt(k00), parseInt(k01)], [parseInt(k10), parseInt(k11)]];
-                
                 if(K.flat().some(isNaN)) return alert("Nhập ma trận khóa hợp lệ");
 
                 let det = det2x2(K);
                 let detInv = modInverse(mod(det, 26), 26);
                 
-                log.push(`Ma trận khóa K:\n[${K[0][0]}, ${K[0][1]}]\n[${K[1][0]}, ${K[1][1]}]`);
-                log.push(`Det(K) = ${K[0][0]}*${K[1][1]} - ${K[0][1]}*${K[1][0]} = ${det}`);
-                log.push(`Det(K) mod 26 = ${mod(det, 26)}`);
-
+                log.push(
+                    <div className="mb-2">
+                        <span className="font-bold">Ma trận khóa K:</span>
+                        <MatrixDisplay matrix={K} />
+                    </div>
+                );
+                
+                log.push(<div>Det(K) = {K[0][0]}×{K[1][1]} - {K[0][1]}×{K[1][0]} = {det}</div>);
+                
                 if (detInv === null) {
-                    log.push(`CẢNH BÁO: GCD(${mod(det, 26)}, 26) != 1. Ma trận không khả nghịch, không thể giải mã!`);
-                    if(!isEncrypt) return alert("Ma trận không khả nghịch, không thể giải mã.");
+                    log.push(<div className="text-red-500 font-bold">LỖI: GCD({mod(det, 26)}, 26) ≠ 1. Ma trận không khả nghịch!</div>);
+                    if(!isEncrypt) return alert("Ma trận không khả nghịch");
                 } else {
-                    log.push(`Nghịch đảo Det(K)^-1 mod 26 = ${detInv}`);
+                    log.push(<div>Nghịch đảo Det(K)⁻¹ mod 26 = {detInv}</div>);
                 }
 
                 let MatrixUsed = K;
-                if (!isEncrypt) {
-                    let adj = adj2x2(K);
-                    let K_inv = [
-                        [mod(adj[0][0] * detInv, 26), mod(adj[0][1] * detInv, 26)],
-                        [mod(adj[1][0] * detInv, 26), mod(adj[1][1] * detInv, 26)]
+                
+                // --- THÊM PHẦN TÍNH MA TRẬN NGHỊCH ĐẢO ---
+                if (!isEncrypt && detInv !== null) {
+                    log.push(<div className="font-bold mt-4 border-t pt-2 border-gray-200 dark:border-gray-700 text-blue-600 dark:text-blue-400">🔹 Tính ma trận nghịch đảo K⁻¹:</div>);
+                    
+                    // 1. Ma trận phụ hợp (Adjugate)
+                    let adj = [
+                        [K[1][1], -K[0][1]],
+                        [-K[1][0], K[0][0]]
                     ];
-                    log.push(`Ma trận nghịch đảo K^-1:\n[${K_inv[0][0]}, ${K_inv[0][1]}]\n[${K_inv[1][0]}, ${K_inv[1][1]}]`);
+                    
+                    log.push(
+                        <div className="mt-2 flex items-center flex-wrap gap-2">
+                            <span>1. Ma trận phụ hợp Adj(K) = </span>
+                            <MatrixDisplay matrix={[['d', '-b'], ['-c', 'a']]} />
+                            <span> = </span>
+                            <MatrixDisplay matrix={adj} />
+                        </div>
+                    );
+
+                    // 2. Nhân với nghịch đảo định thức
+                    log.push(
+                        <div className="mt-2 flex items-center flex-wrap gap-2">
+                            <span>2. K⁻¹ = Det(K)⁻¹ × Adj(K) = {detInv} × </span>
+                            <MatrixDisplay matrix={adj} />
+                            <span> (mod 26)</span>
+                        </div>
+                    );
+
+                    // 3. Tính toán chi tiết từng phần tử
+                    let val_00 = detInv * adj[0][0], cal_00 = `${detInv}×${adj[0][0]}`;
+                    let val_01 = detInv * adj[0][1], cal_01 = `${detInv}×(${adj[0][1]})`;
+                    let val_10 = detInv * adj[1][0], cal_10 = `${detInv}×(${adj[1][0]})`;
+                    let val_11 = detInv * adj[1][1], cal_11 = `${detInv}×${adj[1][1]}`;
+
+                    let K_inv = [
+                        [mod(val_00, 26), mod(val_01, 26)],
+                        [mod(val_10, 26), mod(val_11, 26)]
+                    ];
+
+                    log.push(
+                        <div className="mt-2 ml-4 text-sm font-mono bg-gray-100 dark:bg-gray-800 p-2 rounded">
+                            <div>Hàng 1: [{cal_00}, {cal_01}] = [{val_00}, {val_01}] &equiv; [<span className="font-bold text-red-500">{K_inv[0][0]}</span>, <span className="font-bold text-red-500">{K_inv[0][1]}</span>]</div>
+                            <div>Hàng 2: [{cal_10}, {cal_11}] = [{val_10}, {val_11}] &equiv; [<span className="font-bold text-red-500">{K_inv[1][0]}</span>, <span className="font-bold text-red-500">{K_inv[1][1]}</span>]</div>
+                        </div>
+                    );
+
+                    log.push(
+                        <div className="mt-2 mb-2">
+                            <span className="font-bold">=> Ma trận nghịch đảo K⁻¹:</span>
+                            <MatrixDisplay matrix={K_inv} />
+                        </div>
+                    );
                     MatrixUsed = K_inv;
                 }
+                // ---------------------------------------------
 
                 let cleanText = text.toUpperCase().replace(/[^A-Z]/g, "");
                 if (cleanText.length % 2 !== 0) {
                     cleanText += 'X';
-                    log.push("Đã thêm ký tự đệm 'X' vào cuối để đủ cặp.");
+                    log.push(<div className="text-orange-500 italic">Đã thêm ký tự đệm 'X' vào cuối để đủ cặp.</div>);
                 }
 
-                log.push(`\n--- Bắt đầu tính toán (${multiplyMode === 'Kx' ? 'Ma trận x Vector Cột' : 'Vector Hàng x Ma trận'}) ---`);
+                log.push(<div className="font-bold text-blue-600 mt-4 border-t pt-2 border-gray-200 dark:border-gray-700">🔹 Tính toán ({multiplyMode === 'Kx' ? 'y = Kx' : 'y = xK'}):</div>);
 
+                let output = "";
                 for(let i=0; i<cleanText.length; i+=2) {
                     let v1 = alphabet.indexOf(cleanText[i]);
                     let v2 = alphabet.indexOf(cleanText[i+1]);
-                    
                     let c1, c2;
 
                     if (multiplyMode === 'Kx') {
-                        // y = K * x (Cột)
-                        log.push(`\nCặp: ${cleanText[i]}(${v1}), ${cleanText[i+1]}(${v2}) -> Vector Cột [${v1}, ${v2}]^T`);
+                        // y = K * x (Col)
+                        log.push(
+                            <div className="mt-4 font-bold flex items-center flex-wrap">
+                                Cặp: '{cleanText[i]}'({v1}), '{cleanText[i+1]}'({v2}) &rarr; Vector <MatrixDisplay matrix={[[v1], [v2]]} />
+                            </div>
+                        );
+                        
+                        let cal1 = `${MatrixUsed[0][0]}×${v1} + ${MatrixUsed[0][1]}×${v2}`;
+                        let cal2 = `${MatrixUsed[1][0]}×${v1} + ${MatrixUsed[1][1]}×${v2}`;
                         
                         c1 = mod(MatrixUsed[0][0]*v1 + MatrixUsed[0][1]*v2, 26);
                         c2 = mod(MatrixUsed[1][0]*v1 + MatrixUsed[1][1]*v2, 26);
 
-                        log.push(`Hàng 1: [${MatrixUsed[0][0]}*${v1} + ${MatrixUsed[0][1]}*${v2}] mod 26 = ${c1} (${alphabet[c1]})`);
-                        log.push(`Hàng 2: [${MatrixUsed[1][0]}*${v1} + ${MatrixUsed[1][1]}*${v2}] mod 26 = ${c2} (${alphabet[c2]})`);
+                        log.push(<div className="ml-4">Hàng 1: [{cal1}] = {MatrixUsed[0][0]*v1 + MatrixUsed[0][1]*v2} &equiv; <span className="font-bold text-red-500">{c1} ({alphabet[c1]})</span></div>);
+                        log.push(<div className="ml-4">Hàng 2: [{cal2}] = {MatrixUsed[1][0]*v1 + MatrixUsed[1][1]*v2} &equiv; <span className="font-bold text-red-500">{c2} ({alphabet[c2]})</span></div>);
 
                     } else {
-                        // y = x * K (Hàng)
-                        log.push(`\nCặp: ${cleanText[i]}(${v1}), ${cleanText[i+1]}(${v2}) -> Vector Hàng [${v1}, ${v2}]`);
+                        // y = x * K (Row)
+                        log.push(
+                            <div className="mt-4 font-bold">
+                                Cặp: '{cleanText[i]}'({v1}), '{cleanText[i+1]}'({v2}) &rarr; Vector [{v1}, {v2}]
+                            </div>
+                        );
                         
+                        let cal1 = `${v1}×${MatrixUsed[0][0]} + ${v2}×${MatrixUsed[1][0]}`;
+                        let cal2 = `${v1}×${MatrixUsed[0][1]} + ${v2}×${MatrixUsed[1][1]}`;
+
                         c1 = mod(v1*MatrixUsed[0][0] + v2*MatrixUsed[1][0], 26);
                         c2 = mod(v1*MatrixUsed[0][1] + v2*MatrixUsed[1][1], 26);
 
-                        log.push(`Cột 1: [${v1}*${MatrixUsed[0][0]} + ${v2}*${MatrixUsed[1][0]}] mod 26 = ${c1} (${alphabet[c1]})`);
-                        log.push(`Cột 2: [${v1}*${MatrixUsed[0][1]} + ${v2}*${MatrixUsed[1][1]}] mod 26 = ${c2} (${alphabet[c2]})`);
+                        log.push(<div className="ml-4">Cột 1: [{cal1}] = {v1*MatrixUsed[0][0] + v2*MatrixUsed[1][0]} &equiv; <span className="font-bold text-red-500">{c1} ({alphabet[c1]})</span></div>);
+                        log.push(<div className="ml-4">Cột 2: [{cal2}] = {v1*MatrixUsed[0][1] + v2*MatrixUsed[1][1]} &equiv; <span className="font-bold text-red-500">{c2} ({alphabet[c2]})</span></div>);
                     }
-                    
                     output += alphabet[c1] + alphabet[c2];
                 }
-
                 setResult(output);
-                setSteps(log.join("\n"));
+                setSteps(log);
             };
 
             return (
@@ -499,45 +609,30 @@
                     <div className="mb-4">
                         <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2">Kiểu nhân ma trận:</label>
                         <div className="flex gap-4">
-                            <label className="inline-flex items-center cursor-pointer">
-                                <input 
-                                    type="radio" 
-                                    className="form-radio text-blue-600 focus:ring-blue-500" 
-                                    name="hillMode" 
-                                    value="Kx" 
-                                    checked={multiplyMode === 'Kx'} 
-                                    onChange={() => setMultiplyMode('Kx')}
-                                />
-                                <span className="ml-2 text-gray-700 dark:text-gray-300">y = Kx (Ma trận x Cột - Chuẩn Toán học)</span>
+                            <label className="inline-flex items-center cursor-pointer select-none">
+                                <input type="radio" className="form-radio text-blue-600" name="hillMode" value="Kx" checked={multiplyMode === 'Kx'} onChange={() => setMultiplyMode('Kx')} />
+                                <span className="ml-2 text-gray-700 dark:text-gray-300">y = Kx (Ma trận &times; Cột)</span>
                             </label>
-                            <label className="inline-flex items-center cursor-pointer">
-                                <input 
-                                    type="radio" 
-                                    className="form-radio text-blue-600 focus:ring-blue-500" 
-                                    name="hillMode" 
-                                    value="xK" 
-                                    checked={multiplyMode === 'xK'} 
-                                    onChange={() => setMultiplyMode('xK')}
-                                />
-                                <span className="ml-2 text-gray-700 dark:text-gray-300">y = xK (Hàng x Ma trận)</span>
+                            <label className="inline-flex items-center cursor-pointer select-none">
+                                <input type="radio" className="form-radio text-blue-600" name="hillMode" value="xK" checked={multiplyMode === 'xK'} onChange={() => setMultiplyMode('xK')} />
+                                <span className="ml-2 text-gray-700 dark:text-gray-300">y = xK (Hàng &times; Ma trận)</span>
                             </label>
                         </div>
                     </div>
-
                     <div className="mb-4">
                         <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2">Ma trận khóa:</label>
                         <div className="grid grid-cols-2 gap-2 w-32">
-                            <input className="border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 dark:text-white" placeholder="00" value={k00} onChange={e=>setK00(e.target.value)} />
-                            <input className="border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 dark:text-white" placeholder="01" value={k01} onChange={e=>setK01(e.target.value)} />
-                            <input className="border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 dark:text-white" placeholder="10" value={k10} onChange={e=>setK10(e.target.value)} />
-                            <input className="border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 dark:text-white" placeholder="11" value={k11} onChange={e=>setK11(e.target.value)} />
+                            <input className="border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 dark:text-white text-center" placeholder="00" value={k00} onChange={e=>setK00(e.target.value)} />
+                            <input className="border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 dark:text-white text-center" placeholder="01" value={k01} onChange={e=>setK01(e.target.value)} />
+                            <input className="border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 dark:text-white text-center" placeholder="10" value={k10} onChange={e=>setK10(e.target.value)} />
+                            <input className="border dark:border-gray-600 p-2 bg-white dark:bg-gray-700 dark:text-white text-center" placeholder="11" value={k11} onChange={e=>setK11(e.target.value)} />
                         </div>
                     </div>
                     <div className="flex">
                         <Button onClick={() => process(true)}>Mã hóa</Button>
                         <Button onClick={() => process(false)} variant="secondary">Giải mã</Button>
                     </div>
-                    {result && <ResultBox result={result} steps={steps} />}
+                    <ResultBox result={result} steps={steps} />
                 </Section>
             );
         };
@@ -547,58 +642,54 @@
             const [a, setA] = useState(5);
             const [b, setB] = useState(8);
             const [result, setResult] = useState("");
-            const [steps, setSteps] = useState("");
+            const [steps, setSteps] = useState([]);
 
             const process = (isEncrypt) => {
                 let log = [];
-                let output = "";
-                let valA = parseInt(a);
-                let valB = parseInt(b);
-
-                if(gcd(valA, 26) !== 1) {
-                    return alert(`Giá trị a=${valA} không hợp lệ! GCD(a, 26) phải bằng 1.`);
-                }
+                let valA = parseInt(a), valB = parseInt(b);
+                if(gcd(valA, 26) !== 1) return alert(`Giá trị a=${valA} không hợp lệ! GCD(a, 26) phải bằng 1.`);
 
                 let aInv = modInverse(valA, 26);
-                log.push(`Hàm Mã hóa: E(x) = (${valA}x + ${valB}) mod 26`);
-                log.push(`Hàm Giải mã: D(y) = ${aInv}(y - ${valB}) mod 26`);
-                log.push(`Nghịch đảo của a=${valA} mod 26 là: ${aInv}`);
+                log.push(
+                    <div className="mb-4 p-2 bg-blue-50 dark:bg-blue-900/30 rounded border border-blue-100 dark:border-blue-800">
+                        <div>Hàm Mã hóa: <span className="math-font">E(x) = ({valA}x + {valB}) mod 26</span></div>
+                        <div>Hàm Giải mã: <span className="math-font">D(y) = {aInv}(y - {valB}) mod 26</span></div>
+                        <div className="text-sm text-gray-500 italic">Nghịch đảo của {valA} mod 26 là {aInv}</div>
+                    </div>
+                );
 
                 let cleanText = text.toUpperCase().replace(/[^A-Z]/g, "");
+                let output = "";
 
                 for(let i=0; i<cleanText.length; i++) {
                     let x = alphabet.indexOf(cleanText[i]);
-                    let res;
+                    let res, formula;
                     if(isEncrypt) {
                         res = mod(valA * x + valB, 26);
-                        log.push(`'${cleanText[i]}'(${x}) -> (${valA}*${x} + ${valB}) mod 26 = ${res} ('${alphabet[res]}')`);
+                        formula = <span><span className="font-bold">'{cleanText[i]}'</span>({x}) &rarr; ({valA}&times;{x} + {valB}) = {valA*x+valB} &equiv; {res} &rarr; <span className="font-bold text-red-500">'{alphabet[res]}'</span></span>;
                     } else {
                         res = mod(aInv * (x - valB), 26);
-                        log.push(`'${cleanText[i]}'(${x}) -> ${aInv}*(${x} - ${valB}) mod 26 = ${res} ('${alphabet[res]}')`);
+                        formula = <span><span className="font-bold">'{cleanText[i]}'</span>({x}) &rarr; {aInv}&times;({x} - {valB}) = {aInv*(x-valB)} &equiv; {res} &rarr; <span className="font-bold text-red-500">'{alphabet[res]}'</span></span>;
                     }
+                    log.push(formula);
                     output += alphabet[res];
                 }
-
                 setResult(output);
-                setSteps(log.join("\n"));
+                setSteps(log);
             }
 
             return (
                 <Section title="Mã Affine">
                     <InputGroup label="Văn bản" value={text} onChange={(e) => setText(e.target.value)} />
                     <div className="flex gap-4">
-                        <div className="w-1/2">
-                            <InputGroup label="Hệ số a (GCD(a,26)=1)" type="number" value={a} onChange={(e) => setA(e.target.value)} />
-                        </div>
-                        <div className="w-1/2">
-                            <InputGroup label="Hệ số b (độ dịch)" type="number" value={b} onChange={(e) => setB(e.target.value)} />
-                        </div>
+                        <div className="w-1/2"><InputGroup label="Hệ số a (GCD(a,26)=1)" type="number" value={a} onChange={(e) => setA(e.target.value)} /></div>
+                        <div className="w-1/2"><InputGroup label="Hệ số b (độ dịch)" type="number" value={b} onChange={(e) => setB(e.target.value)} /></div>
                     </div>
                     <div className="flex">
                         <Button onClick={() => process(true)}>Mã hóa</Button>
                         <Button onClick={() => process(false)} variant="secondary">Giải mã</Button>
                     </div>
-                    {result && <ResultBox result={result} steps={steps} />}
+                    <ResultBox result={result} steps={steps} />
                 </Section>
             );
         };
@@ -609,19 +700,17 @@
             const [eVal, setE] = useState("");
             const [message, setMessage] = useState("");
             const [result, setResult] = useState("");
-            const [steps, setSteps] = useState("");
+            const [steps, setSteps] = useState([]);
 
             const process = (mode) => {
                 let log = [];
                 try {
-                    const bigP = BigInt(p);
-                    const bigQ = BigInt(q);
-                    const bigE = BigInt(eVal);
+                    const bigP = BigInt(p), bigQ = BigInt(q), bigE = BigInt(eVal);
                     const bigN = bigP * bigQ;
                     const phi = (bigP - 1n) * (bigQ - 1n);
                     
-                    log.push(`1. Tính n = p * q = ${bigP} * ${bigQ} = ${bigN}`);
-                    log.push(`2. Tính phi(n) = (p-1)*(q-1) = ${phi}`);
+                    log.push(<div>1. Tính <span className="math-font">n = p × q</span> = {bigP.toString()} × {bigQ.toString()} = <span className="font-bold">{bigN.toString()}</span></div>);
+                    log.push(<div>2. Tính <span className="math-font">φ(n) = (p-1)(q-1)</span> = {phi.toString()}</div>);
 
                     let d = null;
                     const extendedGcdBig = (a, b) => {
@@ -629,41 +718,41 @@
                         const { gcd: g, x: x1, y: y1 } = extendedGcdBig(b, a % b);
                         return { gcd: g, x: y1, y: x1 - (a / b) * y1 };
                     };
-                    
                     const { gcd: gVal, x: dVal } = extendedGcdBig(bigE, phi);
+                    
                     if (gVal !== 1n) {
-                         log.push(`LỖI: e=${bigE} không nguyên tố cùng nhau với phi(n)=${phi}. Vui lòng chọn e khác.`);
-                         setSteps(log.join("\n"));
-                         return;
+                         log.push(<div className="text-red-500 font-bold">LỖI: e={bigE.toString()} không nguyên tố cùng nhau với φ(n)={phi.toString()}. Chọn e khác.</div>);
+                         setSteps(log); return;
                     }
                     d = (dVal % phi + phi) % phi;
-                    log.push(`3. Tính d = e^-1 mod phi(n) = ${d}`);
-                    log.push(`=> Khóa công khai (e, n) = (${bigE}, ${bigN})`);
-                    log.push(`=> Khóa bí mật (d, n) = (${d}, ${bigN})`);
+                    log.push(<div>3. Tính <span className="math-font">d = e⁻¹ mod φ(n)</span> = <span className="font-bold text-red-500">{d.toString()}</span></div>);
+                    log.push(<div className="mt-2 p-2 border rounded border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700">Khóa công khai (PU): <span className="font-bold">{{e: bigE.toString(), n: bigN.toString()}}</span></div>);
+                    log.push(<div className="mt-1 p-2 border rounded border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700">Khóa bí mật (PR): <span className="font-bold">{{d: d.toString(), n: bigN.toString()}}</span></div>);
 
                     if (mode === 'encrypt' || mode === 'decrypt') {
-                        if (!message) return alert("Nhập thông điệp số m");
+                        if (!message) return alert("Nhập thông điệp m");
                         const m = BigInt(message);
                         
                         if (mode === 'encrypt') {
                             const c = bigIntPowMod(m, bigE, bigN);
-                            log.push(`\nMã hóa: C = ${m}^${bigE} mod ${bigN}`);
-                            log.push(`Kết quả C = ${c}`);
+                            log.push(<div className="mt-4 font-bold border-t pt-2">Mã hóa:</div>);
+                            log.push(<div><span className="math-font">C = m<sup>e</sup> mod n</span> = {m.toString()}<sup>{bigE.toString()}</sup> mod {bigN.toString()}</div>);
+                            log.push(<div>Kết quả: <span className="font-bold text-xl text-blue-600">{c.toString()}</span></div>);
                             setResult(c.toString());
                         } else {
                             const dec = bigIntPowMod(m, d, bigN);
-                            log.push(`\nGiải mã: M = ${m}^${d} mod ${bigN}`);
-                            log.push(`Kết quả M = ${dec}`);
+                            log.push(<div className="mt-4 font-bold border-t pt-2">Giải mã:</div>);
+                            log.push(<div><span className="math-font">M = c<sup>d</sup> mod n</span> = {m.toString()}<sup>{d.toString()}</sup> mod {bigN.toString()}</div>);
+                            log.push(<div>Kết quả: <span className="font-bold text-xl text-blue-600">{dec.toString()}</span></div>);
                             setResult(dec.toString());
                         }
                     } else {
                         setResult("");
                     }
                 } catch (err) {
-                    log.push("Lỗi: Kiểm tra lại các số liệu nhập vào. Phải là số nguyên.");
-                    console.error(err);
+                    log.push(<div className="text-red-500">Lỗi nhập liệu. Vui lòng kiểm tra lại các số nguyên.</div>);
                 }
-                setSteps(log.join("\n"));
+                setSteps(log);
             };
 
             return (
@@ -682,7 +771,7 @@
                             <Button onClick={() => process('decrypt')} variant="secondary">Giải mã (c^d)</Button>
                         </div>
                     </div>
-                    {steps && <ResultBox result={result} steps={steps} />}
+                    <ResultBox result={result} steps={steps} />
                 </Section>
             );
         };
@@ -693,42 +782,34 @@
             const [a, setA] = useState("6");
             const [b, setB] = useState("15");
             const [result, setResult] = useState("");
-            const [steps, setSteps] = useState("");
+            const [steps, setSteps] = useState([]);
             
             const process = () => {
                 let log = [];
                 try {
-                    const bigP = BigInt(p);
-                    const bigG = BigInt(g);
-                    const bigA = BigInt(a);
-                    const bigB = BigInt(b);
+                    const bigP = BigInt(p), bigG = BigInt(g), bigA = BigInt(a), bigB = BigInt(b);
                     
-                    log.push(`Tham số công khai: p=${bigP}, g=${bigG}`);
-                    log.push(`Bí mật của Alice: a=${bigA}`);
-                    log.push(`Bí mật của Bob: b=${bigB}`);
+                    log.push(<div className="font-bold">Tham số công khai: p={bigP.toString()}, g={bigG.toString()}</div>);
+                    log.push(<div>Bí mật Alice: a={bigA.toString()}</div>);
+                    log.push(<div>Bí mật Bob: b={bigB.toString()}</div>);
                     
                     const A_pub = bigIntPowMod(bigG, bigA, bigP);
-                    log.push(`\n1. Alice tính A = g^a mod p = ${bigG}^${bigA} mod ${bigP} = ${A_pub}`);
+                    log.push(<div className="mt-2"><span className="font-bold">1. Alice tính A</span> = g<sup>a</sup> mod p = {bigG.toString()}<sup>{bigA.toString()}</sup> mod {bigP.toString()} = <span className="font-bold text-blue-600">{A_pub.toString()}</span> (Gửi cho Bob)</div>);
                     
                     const B_pub = bigIntPowMod(bigG, bigB, bigP);
-                    log.push(`2. Bob tính B = g^b mod p = ${bigG}^${bigB} mod ${bigP} = ${B_pub}`);
+                    log.push(<div><span className="font-bold">2. Bob tính B</span> = g<sup>b</sup> mod p = {bigG.toString()}<sup>{bigB.toString()}</sup> mod {bigP.toString()} = <span className="font-bold text-blue-600">{B_pub.toString()}</span> (Gửi cho Alice)</div>);
                     
                     const S_Alice = bigIntPowMod(B_pub, bigA, bigP);
-                    log.push(`\n3. Alice tính khóa chung S = B^a mod p = ${B_pub}^${bigA} mod ${bigP} = ${S_Alice}`);
+                    log.push(<div className="mt-2"><span className="font-bold">3. Alice tính khóa chung:</span> S = B<sup>a</sup> mod p = {B_pub.toString()}<sup>{bigA.toString()}</sup> mod {bigP.toString()} = <span className="font-bold text-green-600">{S_Alice.toString()}</span></div>);
                     
                     const S_Bob = bigIntPowMod(A_pub, bigB, bigP);
-                    log.push(`4. Bob tính khóa chung S = A^b mod p = ${A_pub}^${bigB} mod ${bigP} = ${S_Bob}`);
+                    log.push(<div><span className="font-bold">4. Bob tính khóa chung:</span> S = A<sup>b</sup> mod p = {A_pub.toString()}<sup>{bigB.toString()}</sup> mod {bigP.toString()} = <span className="font-bold text-green-600">{S_Bob.toString()}</span></div>);
                     
-                    if(S_Alice === S_Bob) {
-                        setResult(`Khóa chung S = ${S_Alice}`);
-                    } else {
-                        setResult("Lỗi tính toán");
-                    }
+                    if(S_Alice === S_Bob) setResult(`Khóa chung S = ${S_Alice}`);
+                    else setResult("Lỗi tính toán");
                     
-                } catch(e) {
-                    log.push("Lỗi nhập liệu.");
-                }
-                setSteps(log.join("\n"));
+                } catch(e) { log.push(<div className="text-red-500">Lỗi nhập liệu.</div>); }
+                setSteps(log);
             }
             
             return (
@@ -740,7 +821,7 @@
                         <InputGroup label="Số bí mật Bob (b)" value={b} onChange={(e) => setB(e.target.value)} />
                     </div>
                     <Button onClick={process}>Tính khóa chung</Button>
-                    {result && <ResultBox result={result} steps={steps} />}
+                    <ResultBox result={result} steps={steps} />
                  </Section>
             )
         }
@@ -750,11 +831,8 @@
             const [darkMode, setDarkMode] = useState(false);
 
             useEffect(() => {
-                if (darkMode) {
-                    document.documentElement.classList.add('dark');
-                } else {
-                    document.documentElement.classList.remove('dark');
-                }
+                if (darkMode) document.documentElement.classList.add('dark');
+                else document.documentElement.classList.remove('dark');
             }, [darkMode]);
 
             const tabs = [
@@ -768,16 +846,12 @@
             ];
 
             return (
-                <div className="min-h-screen p-8 max-w-4xl mx-auto transition-colors duration-300">
+                <div className="min-h-screen p-4 md:p-8 max-w-4xl mx-auto transition-colors duration-300">
                     <header className="mb-8 text-center relative">
-                         <button 
-                            onClick={() => setDarkMode(!darkMode)}
-                            className="absolute right-0 top-0 p-2 rounded-full bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                            title={darkMode ? "Chuyển sang chế độ sáng" : "Chuyển sang chế độ tối"}
-                        >
+                         <button onClick={() => setDarkMode(!darkMode)} className="absolute right-0 top-0 p-2 rounded-full bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
                             {darkMode ? <SunIcon /> : <MoonIcon />}
                         </button>
-                        <h1 className="text-4xl font-extrabold text-gray-800 dark:text-white transition-colors">Crypto Solver</h1>
+                        <h1 className="text-3xl md:text-4xl font-extrabold text-gray-800 dark:text-white transition-colors">Crypto Solver</h1>
                         <p className="text-gray-600 dark:text-gray-400 mt-2 transition-colors">Công cụ giải bài tập Mật Mã Học chi tiết</p>
                     </header>
 
@@ -786,7 +860,7 @@
                             <button
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
-                                className={`px-4 py-2 rounded-full font-medium transition-all duration-300 ${
+                                className={`px-4 py-2 rounded-full font-medium transition-all duration-300 text-sm md:text-base ${
                                     activeTab === tab.id 
                                     ? "bg-blue-600 text-white shadow-lg transform scale-105" 
                                     : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
@@ -798,7 +872,6 @@
                     </div>
 
                     <main>
-                        {/* Giữ nguyên state khi chuyển tab bằng CSS display */}
                         <div style={{ display: activeTab === 'caesar' ? 'block' : 'none' }}><CaesarCipher /></div>
                         <div style={{ display: activeTab === 'vigenere' ? 'block' : 'none' }}><VigenereCipher /></div>
                         <div style={{ display: activeTab === 'playfair' ? 'block' : 'none' }}><PlayfairCipher /></div>
