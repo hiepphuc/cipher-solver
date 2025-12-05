@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Công Cụ Giải Mã Mật Mã Học</title>
-    <!-- React & ReactDOM -->
+    <!-- Thư viện React & ReactDOM -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <!-- Babel để xử lý JSX -->
@@ -90,9 +90,6 @@
             return mod(x, m);
         };
         const det2x2 = (m) => m[0][0] * m[1][1] - m[0][1] * m[1][0];
-        const adj2x2 = (m) => [[m[1][1], -m[0][1]], [-m[1][0], m[0][0]]];
-        
-        // Helper for simple modular exponentiation (internal use)
         const bigIntPowMod = (base, exp, modVal) => {
             let res = 1n;
             base = base % modVal;
@@ -277,6 +274,28 @@
             const [result, setResult] = useState("");
             const [steps, setSteps] = useState([]);
 
+            const generateAlphabet = (k) => {
+                let unique = "";
+                let seen = new Set();
+                let kClean = k.toUpperCase().replace(/[^A-Z]/g, "");
+                
+                // Add key chars
+                for(let c of kClean) {
+                    if(!seen.has(c)) {
+                        seen.add(c);
+                        unique += c;
+                    }
+                }
+                // Add rest
+                for(let c of alphabet) {
+                    if(!seen.has(c)) {
+                        seen.add(c);
+                        unique += c;
+                    }
+                }
+                return unique;
+            }
+
             const process = (isEncrypt) => {
                 let log = [];
                 const cleanText = text.toUpperCase().replace(/[^A-Z]/g, "");
@@ -286,39 +305,44 @@
                 if (!cleanKey1) return alert("Vui lòng nhập Khóa 1");
                 if (useTwoKeys && !cleanKey2) return alert("Vui lòng nhập Khóa 2");
 
+                let currentAlpha = alphabet;
+                let alphaName = "Chuẩn (A-Z)";
+
+                if (useTwoKeys) {
+                    // Logic Vigenere 2 khóa: Key2 tạo bảng mã, Key1 dùng để dịch chuyển trên bảng đó
+                    currentAlpha = generateAlphabet(cleanKey2);
+                    alphaName = `Tùy biến (từ Key2: ${cleanKey2})`;
+                    log.push(<div className="mb-2 p-2 bg-gray-200 dark:bg-gray-700 rounded"><strong>Bảng ký tự {alphaName}:</strong><div className="font-mono break-all text-sm mt-1">{currentAlpha}</div></div>);
+                }
+
                 log.push(<div className="font-bold">Văn bản P: {cleanText}</div>);
                 log.push(<div>Khóa K1: {cleanKey1}</div>);
-                if (useTwoKeys) log.push(<div>Khóa K2: {cleanKey2}</div>);
                 
                 let formulaStr = isEncrypt 
-                    ? `C = (P + K1 ${useTwoKeys ? '+ K2' : ''}) mod 26`
-                    : `P = (C - K1 ${useTwoKeys ? '- K2' : ''}) mod 26`;
-                log.push(<div className="font-bold text-blue-600 mb-2">🔹 Công thức: {formulaStr}</div>);
+                    ? `C = (Index(P) + Index(K1)) mod 26`
+                    : `P = (Index(C) - Index(K1)) mod 26`;
+                log.push(<div className="font-bold text-blue-600 mb-2">🔹 Công thức (trên bảng ký tự): {formulaStr}</div>);
 
                 let output = "";
                 for (let i = 0; i < cleanText.length; i++) {
                     const char = cleanText[i];
-                    const pIdx = alphabet.indexOf(char);
-                    const k1Char = cleanKey1[i % cleanKey1.length];
-                    const k1Idx = alphabet.indexOf(k1Char);
-
-                    let k2Idx = 0, k2Char = '';
-                    if (useTwoKeys) {
-                        k2Char = cleanKey2[i % cleanKey2.length];
-                        k2Idx = alphabet.indexOf(k2Char);
-                    }
+                    // Tìm index trên bảng mã hiện tại (Chuẩn hoặc Tùy biến)
+                    const pIdx = currentAlpha.indexOf(char);
                     
+                    const k1Char = cleanKey1[i % cleanKey1.length];
+                    const k1Idx = currentAlpha.indexOf(k1Char); // Key cũng map theo bảng mã này
+
                     let cIdx, calc;
                     if (isEncrypt) {
-                        cIdx = mod(pIdx + k1Idx + k2Idx, 26);
-                        let sum = pIdx + k1Idx + k2Idx;
-                        calc = `${pIdx} + ${k1Idx}${useTwoKeys ? ` + ${k2Idx}` : ''} = ${sum}`;
+                        cIdx = mod(pIdx + k1Idx, 26);
+                        calc = `${pIdx} + ${k1Idx} = ${pIdx + k1Idx}`;
                     } else {
-                        cIdx = mod(pIdx - k1Idx - k2Idx, 26);
-                        let diff = pIdx - k1Idx - k2Idx;
-                        calc = `${pIdx} - ${k1Idx}${useTwoKeys ? ` - ${k2Idx}` : ''} = ${diff}`;
+                        cIdx = mod(pIdx - k1Idx, 26);
+                        calc = `${pIdx} - ${k1Idx} = ${pIdx - k1Idx}`;
                     }
                     
+                    const resChar = currentAlpha[cIdx];
+
                     log.push(
                         <div className="flex flex-wrap gap-2 items-center">
                             <span className="w-6 font-bold text-gray-500">[{i+1}]</span>
@@ -326,11 +350,11 @@
                             <span className="text-gray-400">&rarr;</span>
                             <span className="font-mono text-sm">{calc} &equiv; {cIdx}</span>
                             <span className="text-gray-400">&rarr;</span>
-                            <span className="font-bold text-red-500">'{alphabet[cIdx]}'</span>
-                            <span className="text-xs text-gray-400 ml-2">(K1:'{k1Char}'{useTwoKeys ? `, K2:'${k2Char}'` : ''})</span>
+                            <span className="font-bold text-red-500">'{resChar}'</span>
+                            <span className="text-xs text-gray-400 ml-2">(K1:'{k1Char}'[{k1Idx}])</span>
                         </div>
                     );
-                    output += alphabet[cIdx];
+                    output += resChar;
                 }
                 setResult(output);
                 setSteps(log);
@@ -343,11 +367,12 @@
                             <input type="checkbox" checked={useTwoKeys} onChange={(e) => setUseTwoKeys(e.target.checked)} className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 border-gray-300 dark:border-gray-500" />
                             <span className="text-gray-700 dark:text-gray-300 font-bold ml-2">Sử dụng 2 khóa (Vigenere 2 Key)</span>
                         </label>
+                        {useTwoKeys && <div className="text-sm text-gray-500 mt-1 ml-7 italic">Lưu ý: Khóa 2 dùng để tạo bảng mã, Khóa 1 dùng để dịch chuyển.</div>}
                     </div>
                     <InputGroup label="Văn bản" value={text} onChange={(e) => setText(e.target.value)} />
                     <div className="flex gap-4">
-                        <div className="flex-1"><InputGroup label="Khóa 1 (K1)" value={key1} onChange={(e) => setKey1(e.target.value)} /></div>
-                        {useTwoKeys && <div className="flex-1"><InputGroup label="Khóa 2 (K2)" value={key2} onChange={(e) => setKey2(e.target.value)} /></div>}
+                        <div className="flex-1"><InputGroup label="Khóa 1 (K1 - Dịch chuyển)" value={key1} onChange={(e) => setKey1(e.target.value)} /></div>
+                        {useTwoKeys && <div className="flex-1"><InputGroup label="Khóa 2 (K2 - Tạo bảng mã)" value={key2} onChange={(e) => setKey2(e.target.value)} /></div>}
                     </div>
                     <div className="flex">
                         <Button onClick={() => process(true)}>Mã hóa</Button>
